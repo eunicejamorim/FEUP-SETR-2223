@@ -84,15 +84,15 @@ void loop() {
   
   int distance = getDistance();
 
-  if (!movingForward && distance >= minDist + tolerance)
+  if (!movingForward && distance > minDist + tolerance)
   {
     forward(50);
   }
-  else if (!movingBackwards && distance <= minDist - tolerance)
+  else if (!movingBackwards && distance < minDist - tolerance)
   {
     backwards(50);
   }
-  else if ((movingForward || movingBackwards) && distance >= minDist - tolerance && distance <= minDist + tolerance)
+  else if (movingForward || movingBackwards)
   {
     stop();
   }
