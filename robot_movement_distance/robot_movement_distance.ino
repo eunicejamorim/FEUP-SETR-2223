@@ -71,7 +71,10 @@ void setup() {
   pinMode(AIN1,OUTPUT);
   pinMode(PWMB,OUTPUT);       
   pinMode(AIN1,OUTPUT);     
-  pinMode(AIN2,OUTPUT);  
+  pinMode(AIN2,OUTPUT);
+
+  pinMode(TRIG, OUTPUT);
+  pinMode(ECHO, INPUT);
 }
 
 int speed = 80;
