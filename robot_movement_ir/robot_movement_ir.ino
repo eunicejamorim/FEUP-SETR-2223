@@ -8,11 +8,11 @@
 #define BIN2 A3  //Motor-R backward (IN4)
 #define IR 7
 
-#define KEY2 0x18        //Key:2
-#define KEY8 0x52        //Key:8
-#define KEY4 0x08        //Key:4
-#define KEY6 0x5A        //Key:6
-#define KEY5 0x1C        //Key:5
+#define KEY2 0x18  //Key:2
+#define KEY8 0x52  //Key:8
+#define KEY4 0x08  //Key:4
+#define KEY6 0x5A  //Key:6
+#define KEY5 0x1C  //Key:5
 
 void translateIR(unsigned int command)  // takes action based on IR code received
 // describing KEYES Remote IR codes
@@ -87,18 +87,18 @@ void stop() {
 
 void setup() {
   IrReceiver.begin(IR, ENABLE_LED_FEEDBACK);  // Start the receiver
-  pinMode(PWMA,OUTPUT);                     
-  pinMode(AIN2,OUTPUT);      
-  pinMode(AIN1,OUTPUT);
-  pinMode(PWMB,OUTPUT);       
-  pinMode(BIN1,OUTPUT);     
-  pinMode(BIN2,OUTPUT);  
+  pinMode(PWMA, OUTPUT);
+  pinMode(AIN2, OUTPUT);
+  pinMode(AIN1, OUTPUT);
+  pinMode(PWMB, OUTPUT);
+  pinMode(BIN1, OUTPUT);
+  pinMode(BIN2, OUTPUT);
 }
 
 void loop() {
   if (IrReceiver.decode()) {
     unsigned int command = IrReceiver.decodedIRData.command;  // Print "old" raw data
     translateIR(command);
-    IrReceiver.resume();                                      // Enable receiving of the next value
+    IrReceiver.resume();  // Enable receiving of the next value
   }
 }
