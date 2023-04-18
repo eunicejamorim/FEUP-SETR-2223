@@ -69,16 +69,23 @@ int speed = 100;
 int minDist = 20;   // min distance to target in cm
 int tolerance = 2;  // tolerance for the distance in cm
 
+int stopped = 0;
+int stopped_distance = 0;
+
 void loop() {
   // put your main code here, to run repeatedly:
 
   int distance = getDistance();
 
-  if (distance > minDist + tolerance) {
+  if (stopped ? (distance > stopped_distance + tolerance) : (distance > minDist + tolerance)) {
     forward(speed);
-  } else if (distance < minDist - tolerance) {
+    stopped = 0;
+  } else if (stopped ? (distance < stopped_distance - tolerance) : (distance < minDist - tolerance)) {
     backwards(speed);
+    stopped = 0;
   } else {
     stop();
+    stopped = 1;
+    stopped_distance = distance;
   }
 }
