@@ -1,3 +1,9 @@
+#include <Adafruit_SSD1306.h>
+
+#define OLED_RESET 9
+#define OLED_SA0   8
+Adafruit_SSD1306 display(OLED_RESET, OLED_SA0);
+
 #define PWMA 10  //Left Motor Speed pin (ENA)
 #define AIN2 A0  //Motor-L forward (IN2).
 #define AIN1 A1  //Motor-L backward (IN1)
@@ -53,6 +59,10 @@ int getDistance()  // Measure the distance
 
 void setup() {
   // put your setup code here, to run once:
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3D);  // initialize with the I2C addr 0x3D (for the 128x64)
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+
   pinMode(PWMA, OUTPUT);
   pinMode(AIN2, OUTPUT);
   pinMode(AIN1, OUTPUT);
@@ -66,7 +76,7 @@ void setup() {
 
 int speed = 100;
 
-int minDist = 20;   // min distance to target in cm
+int minDist = 30;   // min distance to target in cm
 int tolerance = 2;  // tolerance for the distance in cm
 
 int stopped = 0;
@@ -88,4 +98,9 @@ void loop() {
     stopped = 1;
     stopped_distance = distance;
   }
+
+  display.clearDisplay();
+  display.setCursor(26 - 3 * (distance < 10 ? 0 : distance < 100 ? 1 : 2), 0);
+  display.print("Distance: "); display.print(distance); display.println("cm");
+  display.display();
 }
