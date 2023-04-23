@@ -15,33 +15,19 @@ Adafruit_SSD1306 display(OLED_RESET, OLED_SA0);
 #define ECHO 4
 #define TRIG 5
 
-#define B_SPEED_OFFSET 6
+#define B_SPEED_OFFSET 7
 
-void forward(int speed) {
-  analogWrite(PWMA, speed);
-  analogWrite(PWMB, speed - B_SPEED_OFFSET);
-  digitalWrite(AIN1, LOW);
-  digitalWrite(AIN2, HIGH);
-  digitalWrite(BIN1, LOW);
-  digitalWrite(BIN2, HIGH);
-}
+int right_motor = 0;
+int left_motor = 0;
 
-void backwards(int speed) {
-  analogWrite(PWMA, speed);
-  analogWrite(PWMB, speed - B_SPEED_OFFSET);
-  digitalWrite(AIN1, HIGH);
-  digitalWrite(AIN2, LOW);
-  digitalWrite(BIN1, HIGH);
-  digitalWrite(BIN2, LOW);
-}
-
-void stop() {
-  analogWrite(PWMA, 0);
-  analogWrite(PWMB, 0);
-  digitalWrite(AIN1, LOW);
-  digitalWrite(AIN2, LOW);
-  digitalWrite(BIN1, LOW);
-  digitalWrite(BIN2, LOW);
+void move()
+{
+  analogWrite(PWMA, abs(left_motor));
+  analogWrite(PWMB, abs(right_motor));
+  digitalWrite(AIN1, left_motor >= 0 ? LOW : HIGH);
+  digitalWrite(AIN2, left_motor > 0 ? HIGH : LOW);
+  digitalWrite(BIN1, right_motor >= 0 ? LOW : HIGH);
+  digitalWrite(BIN2, right_motor > 0 ? HIGH : LOW);
 }
 
 int getDistance()  // Measure the distance
@@ -88,19 +74,28 @@ void loop() {
   int distance = getDistance();
 
   if (stopped ? (distance > stopped_distance + tolerance) : (distance > minDist + tolerance)) {
-    forward(speed);
+    right_motor = speed - B_SPEED_OFFSET;
+    left_motor = speed;
     stopped = 0;
   } else if (stopped ? (distance < stopped_distance - tolerance) : (distance < minDist - tolerance)) {
-    backwards(speed);
+    right_motor = -speed + B_SPEED_OFFSET;
+    left_motor = -speed;
     stopped = 0;
   } else {
-    stop();
+    right_motor = 0;
+    left_motor = 0;
     stopped = 1;
     stopped_distance = distance;
   }
 
+  move();
+
   display.clearDisplay();
   display.setCursor(26 - 3 * (distance < 10 ? 0 : distance < 100 ? 1 : 2), 0);
   display.print("Distance: "); display.print(distance); display.println("cm");
+  display.setCursor(0, 16);
+  display.print("Right motor: "); display.println(right_motor);
+  display.setCursor(0, 32);
+  display.print("Left motor: "); display.println(left_motor);
   display.display();
 }
