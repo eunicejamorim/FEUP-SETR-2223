@@ -6,7 +6,7 @@
 #define OLED_SA0   8
 Adafruit_SSD1306 display(OLED_RESET, OLED_SA0);
 
-#define PWMA 10  //Left Motor Speed pin (ENA)
+#define PWMA 6  //Left Motor Speed pin (ENA)
 #define AIN2 A0  //Motor-L forward (IN2).
 #define AIN1 A1  //Motor-L backward (IN1)
 #define PWMB 11  //Right Motor Speed pin (ENB)
