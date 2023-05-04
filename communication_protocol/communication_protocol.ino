@@ -10,26 +10,36 @@ void setup() {
 }
 
 void loop() {
-  int length = 2;
-  uint8_t *temp = (uint8_t*) malloc(length * sizeof(uint8_t));
-  temp[0] = FLAG;
-  temp[1] = ESCAPE;
-  Serial.print("\nBEFORE:\n");
-  for (int i = 0; i < length; ++i) {
-    Serial.print(temp[i], HEX);
+  uint8_t data_length = 2;
+  uint8_t *data = (uint8_t*) malloc(data_length * sizeof(uint8_t));
+  data[0] = FLAG;
+  data[1] = ESCAPE;
+
+  Serial.println("INITIAL_DATA:");
+  for (int i = 0; i < data_length; ++i) {
+    Serial.println(data[i], HEX);
   }
-  length = data_stuffing(temp, length);
-  Serial.print("\nAFTER:\n");
-  for (int i = 0; i < length; ++i) {
-    Serial.print(temp[i], HEX);
+
+  uint8_t *frame = NULL;
+  uint8_t frame_length = create_frame(&frame, data, data_length);
+  free(data);
+  
+  Serial.println("FRAME:");
+  for (int i = 0; i < frame_length; ++i) {
+    Serial.println(frame[i], HEX);
   }
-  free(temp);
 
-  delay(1000);
-}
+  data_length = get_frame_data(&data, frame, frame_length);
+  free(frame);
 
-void create_frame(uint8_t *frame, uint8_t *data, uint8_t length) {
+  Serial.println("FINAL_DATA:");
+  for (int i = 0; i < data_length; ++i) {
+    Serial.println(data[i], HEX);
+  }
 
+  free(data);
+
+  delay(5000);
 }
 
 uint8_t calculate_bcc(uint8_t *data, uint8_t length) {
@@ -40,49 +50,101 @@ uint8_t calculate_bcc(uint8_t *data, uint8_t length) {
   return bcc;
 }
 
-uint8_t data_stuffing(uint8_t *data, uint8_t length) {
-
+uint8_t stuffing(uint8_t **dst, uint8_t *src, uint8_t length) {
   // Calculating new length
   uint8_t new_length = length;
   for (int i = 0; i < length; ++i) {
-    if (data[i] == FLAG || data[i] == ESCAPE) {
+    if (src[i] == FLAG || src[i] == ESCAPE) {
       new_length++;
     }
   }
 
-  Serial.println(new_length);
-
   // Allocating new data
-  uint8_t *new_data = (uint8_t*) malloc(new_length * sizeof(uint8_t));
-  Serial.println("HERE");
-  if (new_data == NULL) {
-    Serial.println("Error on new_data malloc");
+  *dst = (uint8_t*) malloc(new_length * sizeof(uint8_t));
+  if (*dst == NULL) {
+    printf("Error on dst malloc");
     return 0;
   }
 
   // Data stuffing
   int x = 0;
   for (int y = 0; y < length; ++y) {
-    if (data[y] == FLAG || data[y] == ESCAPE) {
-      new_data[x] = ESCAPE;
-      new_data[x+1] = (uint8_t) (data[y] ^ 0x20);
+    if (src[y] == FLAG || src[y] == ESCAPE) {
+      (*dst)[x] = ESCAPE;
+      (*dst)[x+1] = src[y] ^ 0x20;
       x += 2;
     } else {
-      new_data[x] = data[y];
+      (*dst)[x] = src[y];
       x++;
     }
   }
 
-  Serial.println((unsigned int) data);
-  Serial.println((unsigned int) new_data);
+  return new_length;
+}
 
-  uint8_t *old_data = data;
-  data = new_data;
-  free(old_data);
+uint8_t destuffing(uint8_t **dst, uint8_t *src, uint8_t length) {
+  // Calculating new length
+  uint8_t new_length = length;
+  for (int i = 0; i < length - 1; ++i) {
+    if (src[i] == ESCAPE && (src[i+1] == FLAG ^ 0x20 || src[i+1] == ESCAPE ^ 0x20)) {
+      new_length--;
+    }
+  }
+
+  // Allocating new data
+  *dst = (uint8_t*) malloc(new_length * sizeof(uint8_t));
+  if (*dst == NULL) {
+    printf("Error on dst malloc\n");
+    return 0;
+  }
+
+  // Data stuffing
+  int x = 0;
+  for (int y = 0; y < new_length; ++y) {
+    if (src[x] == ESCAPE && src[x+1] == (FLAG ^ 0x20)) {
+      (*dst)[y] = FLAG;
+      x += 2;
+    } else if (src[x] == ESCAPE && src[x+1] == (ESCAPE ^ 0x20)) {
+      (*dst)[y] = ESCAPE;
+      x += 2;
+    } else {
+      (*dst)[y] = src[x];
+      x++;
+    }
+  }
 
   return new_length;
 }
 
-uint8_t data_destuffing(uint8_t *data, uint8_t length) {
+uint8_t create_frame(uint8_t **dst, uint8_t *src, uint8_t length) {
+  uint8_t frame_length = length + 3;
+  uint8_t *frame_before_stuffing = (uint8_t *) malloc(frame_length * sizeof(uint8_t));
+  memcpy(frame_before_stuffing + 1, src, length);
+  frame_before_stuffing[0] = 0;
+  frame_before_stuffing[frame_length - 2] = calculate_bcc(frame_before_stuffing + 1, length);
+  frame_before_stuffing[frame_length - 1] = 0;
+  if ((frame_length = stuffing(dst, frame_before_stuffing, frame_length)) == 0) {
+    free(frame_before_stuffing);
+    return 0;
+  }
+  (*dst)[0] = FLAG;
+  (*dst)[frame_length - 1] = FLAG;
+  return frame_length;
+}
 
+uint8_t get_frame_data(uint8_t **dst, uint8_t *src, uint8_t length) {
+  uint8_t *frame = NULL;
+  uint8_t frame_length = destuffing(&frame, src, length);
+  uint8_t data_length = frame_length - 3;
+  if (frame[frame_length - 2] != calculate_bcc(frame + 1, data_length)) {
+    printf("Invalid BCC\n");
+    return 0;
+  }
+  *dst = (uint8_t *) malloc(data_length * sizeof(uint8_t));
+  if (*dst == NULL) {
+    printf("Error on dst malloc\n");
+    return 0;
+  }
+  memcpy(*dst, frame + 1, data_length);
+  return data_length;
 }
