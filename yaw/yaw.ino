@@ -24,6 +24,9 @@ void configureSensor(void)
 float currentAngle = 0;
 long int time;
 
+float getYaw(){
+  return currentAngle;
+}
 void setup(void) 
 {
 #ifndef ESP8266
@@ -62,7 +65,7 @@ void updateAngle(){
 void loop(void) 
 {  
   updateAngle();
-  Serial.print(currentAngle);
+  Serial.print(getYaw());
   Serial.print("\n");
   delay(250);
 }
