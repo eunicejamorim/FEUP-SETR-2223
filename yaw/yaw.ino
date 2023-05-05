@@ -3,6 +3,7 @@
 #include <Adafruit_Sensor.h>
 #include <Adafruit_LSM9DS0.h>
    
+//wiring vin - 5v gnd - gnd slc-a5 sda-a4   
 
 Adafruit_LSM9DS0 lsm = Adafruit_LSM9DS0(1000);  // Use I2C, ID #1000
 
