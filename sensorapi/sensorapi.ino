@@ -21,6 +21,7 @@ void configureSensor(void)
 }
 
 float currentAngle = 0;
+long int time;
 
 void setup(void) 
 {
@@ -45,14 +46,22 @@ void setup(void)
   
   /* We're ready to go! */
   Serial.println("");
+  time = millis();
 }
 /**************************************************************************/
-void loop(void) 
-{  
+void updateAngle(){
   sensors_event_t accel, mag, gyro, temp;
   lsm.getEvent(&accel, &mag, &gyro, &temp); 
+  long int currentTime = millis();
+  long int timeElapsed = currentTime-time;
+  time = currentTime;
+  currentAngle += 180 * gyro.gyro.z / M_PI * (timeElapsed) * 0.001;
+}
+
+void loop(void) 
+{  
+  updateAngle();
   Serial.print(currentAngle);
   Serial.print("\n");
-  currentAngle += 180 * gyro.gyro.z / M_PI * 0.25;
   delay(250);
 }
