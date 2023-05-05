@@ -1,9 +1,12 @@
 #include <Adafruit_SSD1306.h>
+#include <Adafruit_LSM9DS0.h>
 
 //DEFINES
 #define OLED_RESET 9
 #define OLED_SA0   8
 Adafruit_SSD1306 display(OLED_RESET, OLED_SA0);
+
+Adafruit_LSM9DS0 lsm(1000);
 
 #define PWMA 6  //Left Motor Speed pin (ENA)
 #define AIN2 A0  //Motor-L forward (IN2).
@@ -118,6 +121,39 @@ int stopped_distance = 0;
 
 int distance;
 
+float angleError = 0;
+float currentAngle = 0;
+long int angleTime;
+
+void configureAngleSensor(void)
+{
+  lsm.setupGyro(lsm.LSM9DS0_GYROSCALE_245DPS);
+}
+
+void updateAngleError()
+{
+  int c = 200;
+  for (int i = 0; i < c; i++) {
+    sensors_event_t accel, mag, gyro, temp;
+    lsm.getEvent(&accel, &mag, &gyro, &temp); 
+
+    angleTime = gyro.timestamp;
+    angleError += gyro.gyro.z;
+    delay(10);
+  }
+
+  angleError /= c;
+}
+
+void updateAngle(){
+  sensors_event_t accel, mag, gyro, temp;
+  lsm.getEvent(&accel, &mag, &gyro, &temp); 
+  long int currentTime = gyro.timestamp;
+  long int timeElapsed = currentTime-angleTime;
+  angleTime = currentTime;
+  currentAngle += 180 * (gyro.gyro.z - angleError) / M_PI * (timeElapsed) * 0.001;
+}
+
 void move()
 {
   analogWrite(PWMA, abs(left_motor));
@@ -161,17 +197,20 @@ void processDistance()
 
 void displayData() {
   display.clearDisplay();
-  display.setCursor(26 - 3 * (distance < 10 ? 0 : distance < 100 ? 1 : 2), 0);
-  display.print("Distance: "); display.print(distance); display.println("cm");
+  display.setCursor(10, 0);
+  display.print("D: "); display.print(distance); display.print("cm A: "); display.print(currentAngle); display.print("dg");
   display.setCursor(0, 16);
-  display.print("Right motor: "); display.println(right_motor);
+  display.print("Right motor: "); display.print(right_motor);
   display.setCursor(0, 32);
-  display.print("Left motor: "); display.println(left_motor);
+  display.print("Left motor: "); display.print(left_motor);
   display.display();
 }
 
 void setup() {
-  // put your setup code here, to run once:
+  lsm.begin();
+  
+  configureAngleSensor();
+
   display.begin(SSD1306_SWITCHCAPVCC, 0x3D);  // initialize with the I2C addr 0x3D (for the 128x64)
   display.setTextSize(1);
   display.setTextColor(WHITE);
@@ -186,20 +225,16 @@ void setup() {
   pinMode(TRIG, OUTPUT);
   pinMode(ECHO, INPUT);
 
+  updateAngleError();
+
   Sched_Init();
-  Sched_AddT(getDistance, 1, 10);
-  Sched_AddT(processDistance, 1, 10);
-  Sched_AddT(move, 1, 10);
-  Sched_AddT(displayData, 1, 10);
+  Sched_AddT(getDistance, 1, 100);
+  Sched_AddT(processDistance, 1, 100);
+  Sched_AddT(move, 1, 100);
+  Sched_AddT(displayData, 1, 100);
+  Sched_AddT(updateAngle, 1, 10);
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  /*getDistance();
-
-  processDistance();
-
-  move();
-
-  displayData();*/
+  // NOTHING TO DO
 }

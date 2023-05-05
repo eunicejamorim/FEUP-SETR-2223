@@ -1,10 +1,13 @@
 #include <IRremote.hpp>
 #include <Adafruit_SSD1306.h>
+#include <Adafruit_LSM9DS0.h>
 
 // DEFINES
 #define OLED_RESET 9
 #define OLED_SA0   8
 Adafruit_SSD1306 display(OLED_RESET, OLED_SA0);
+
+Adafruit_LSM9DS0 lsm(1000);  // Use I2C, ID #1000
 
 #define PWMA 6  //Left Motor Speed pin (ENA)
 #define AIN2 A0  //Motor-L forward (IN2).
@@ -110,10 +113,43 @@ ISR(TIMER1_COMPA_vect){//timer1 interrupt
 int right_motor = 0;
 int left_motor = 0;
 
-int speed = 100;
+int speed = 50;
 int rotate_speed = 30;
 
 unsigned int command;
+
+float angleError = 0;
+float currentAngle = 0;
+long int angleTime;
+
+void configureAngleSensor(void)
+{
+  lsm.setupGyro(lsm.LSM9DS0_GYROSCALE_245DPS);
+}
+
+void updateAngleError()
+{
+  int c = 200;
+  for (int i = 0; i < c; i++) {
+    sensors_event_t accel, mag, gyro, temp;
+    lsm.getEvent(&accel, &mag, &gyro, &temp); 
+
+    angleTime = gyro.timestamp;
+    angleError += gyro.gyro.z;
+    delay(10);
+  }
+
+  angleError /= c;
+}
+
+void updateAngle(){
+  sensors_event_t accel, mag, gyro, temp;
+  lsm.getEvent(&accel, &mag, &gyro, &temp); 
+  long int currentTime = gyro.timestamp;
+  long int timeElapsed = currentTime-angleTime;
+  angleTime = currentTime;
+  currentAngle += 180 * (gyro.gyro.z - angleError) / M_PI * (timeElapsed) * 0.001;
+}
 
 void translateIR()
 {
@@ -126,10 +162,6 @@ void translateIR()
       right_motor = rotate_speed;
       left_motor = -rotate_speed;
       break;
-    case KEY5:
-      right_motor = 0;
-      left_motor = 0;
-      break;
     case KEY6:
       right_motor = -rotate_speed;
       left_motor = rotate_speed;
@@ -138,6 +170,7 @@ void translateIR()
       right_motor = -speed;
       left_motor = -speed;
       break;
+    case KEY5:
     default:
       right_motor = 0;
       left_motor = 0;
@@ -147,8 +180,8 @@ void translateIR()
 
 void move()
 {
-  analogWrite(PWMA, abs(left_motor));
-  analogWrite(PWMB, abs(right_motor));
+  analogWrite(PWMA, abs(left_motor) + (int)currentAngle);
+  analogWrite(PWMB, abs(right_motor) - (int)currentAngle);
   digitalWrite(AIN1, left_motor >= 0 ? LOW : HIGH);
   digitalWrite(AIN2, left_motor > 0 ? HIGH : LOW);
   digitalWrite(BIN1, right_motor >= 0 ? LOW : HIGH);
@@ -164,6 +197,8 @@ void decodeIR() {
 
 void displayData() {
   display.clearDisplay();
+  display.setCursor(26 - 3 * (currentAngle < 10 ? 0 : 1), 0);
+  display.print("Angle: "); display.print(currentAngle); display.println("dg");
   display.setCursor(0, 16);
   display.print("Right motor: "); display.println(right_motor);
   display.setCursor(0, 32);
@@ -173,14 +208,16 @@ void displayData() {
 
 
 void setup() {
-  Serial.begin(9600);
-  Serial.println("Front Car Setup Started");
+  lsm.begin();
+  
+  configureAngleSensor();
 
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3D);  // initialize with the I2C addr 0x3D (for the 128x64)
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
   display.setTextSize(1);
   display.setTextColor(WHITE);
 
-  IrReceiver.begin(IR, ENABLE_LED_FEEDBACK);  // Start the receiver
+  IrReceiver.begin(IR, ENABLE_LED_FEEDBACK);
+
   pinMode(PWMA, OUTPUT);
   pinMode(AIN2, OUTPUT);
   pinMode(AIN1, OUTPUT);
@@ -188,22 +225,16 @@ void setup() {
   pinMode(BIN1, OUTPUT);
   pinMode(BIN2, OUTPUT);
 
-  Sched_Init();
-  Sched_AddT(decodeIR, 1, 10);
-  Sched_AddT(translateIR, 1, 10);
-  Sched_AddT(move, 1, 10);
-  Sched_AddT(displayData, 1, 10);
+  updateAngleError();
 
-  Serial.println("Front Car Setup Completed");
+  Sched_Init();
+  Sched_AddT(decodeIR, 1, 100);
+  Sched_AddT(translateIR, 1, 100);
+  Sched_AddT(move, 1, 100);
+  Sched_AddT(updateAngle, 1, 100);
+  Sched_AddT(displayData, 1, 100);
 }
 
 void loop() {
-  /*if (IrReceiver.decode()) {
-    command = IrReceiver.decodedIRData.command;  // Print "old" raw data
-    translateIR();
-    move();
-    IrReceiver.resume();  // Enable receiving of the next value
-  }
-
-  displayData();*/
+  // NOTHING TO DO
 }
