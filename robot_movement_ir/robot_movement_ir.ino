@@ -1,3 +1,4 @@
+#define DECODE_NEC
 #include <IRremote.hpp>
 #include <Adafruit_SSD1306.h>
 #include <Adafruit_LSM9DS0.h>
@@ -130,28 +131,28 @@ void configureAngleSensor(void)
 void updateAngleError()
 {
   int c = 200;
+  sensors_event_t gyro;
   for (int i = 0; i < c; i++) {
-    sensors_event_t accel, mag, gyro, temp;
-    lsm.getEvent(&accel, &mag, &gyro, &temp); 
+    delay(10);
+    lsm.getGyro().getEvent(&gyro);
 
     angleTime = gyro.timestamp;
     angleError += gyro.gyro.z;
-    delay(10);
   }
 
   angleError /= c;
 }
 
 void updateAngle(){
-  sensors_event_t accel, mag, gyro, temp;
-  lsm.getEvent(&accel, &mag, &gyro, &temp); 
+  sensors_event_t gyro;
+  lsm.getGyro().getEvent(&gyro);
   long int currentTime = gyro.timestamp;
   long int timeElapsed = currentTime-angleTime;
   angleTime = currentTime;
   currentAngle += 180 * (gyro.gyro.z - angleError) / M_PI * (timeElapsed) * 0.001;
 }
 
-void translateIR()
+void translateCommands()
 {
   switch (command) {
     case KEY2:
@@ -161,10 +162,12 @@ void translateIR()
     case KEY4:
       right_motor = rotate_speed;
       left_motor = -rotate_speed;
+      currentAngle = 0.0f;
       break;
     case KEY6:
       right_motor = -rotate_speed;
       left_motor = rotate_speed;
+      currentAngle = 0.0f;
       break;
     case KEY8:
       right_motor = -speed;
@@ -174,14 +177,18 @@ void translateIR()
     default:
       right_motor = 0;
       left_motor = 0;
+      currentAngle = 0.0f;
       break;
   }
+
+  right_motor -= currentAngle / 2.5f;
+  left_motor += currentAngle / 2.5f;
 }
 
 void move()
 {
-  analogWrite(PWMA, abs(left_motor) + (int)currentAngle);
-  analogWrite(PWMB, abs(right_motor) - (int)currentAngle);
+  analogWrite(PWMA, abs(left_motor));
+  analogWrite(PWMB, abs(right_motor));
   digitalWrite(AIN1, left_motor >= 0 ? LOW : HIGH);
   digitalWrite(AIN2, left_motor > 0 ? HIGH : LOW);
   digitalWrite(BIN1, right_motor >= 0 ? LOW : HIGH);
@@ -190,7 +197,7 @@ void move()
 
 void decodeIR() {
   if (IrReceiver.decode()) {
-      command = IrReceiver.decodedIRData.command;  // Print "old" raw data
+      command = IrReceiver.decodedIRData.command;
       IrReceiver.resume();
   }
 }
@@ -198,23 +205,31 @@ void decodeIR() {
 void displayData() {
   display.clearDisplay();
   display.setCursor(26 - 3 * (currentAngle < 10 ? 0 : 1), 0);
-  display.print("Angle: "); display.print(currentAngle); display.println("dg");
+  display.print(F("Angle: ")); display.print(currentAngle); display.println(F("dg"));
   display.setCursor(0, 16);
-  display.print("Right motor: "); display.println(right_motor);
+  display.print(F("Right motor: ")); display.println(right_motor);
   display.setCursor(0, 32);
-  display.print("Left motor: "); display.println(left_motor);
+  display.print(F("Left motor: ")); display.println(left_motor);
   display.display();
 }
 
 
 void setup() {
-  lsm.begin();
-  
-  configureAngleSensor();
-
   display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
   display.setTextSize(1);
   display.setTextColor(WHITE);
+
+  display.clearDisplay();
+  display.setCursor(1, 0);
+  display.print(F("Calibration in 1000ms"));
+  display.setCursor(30, 8);
+  display.print(F("Stand Still"));
+  display.display();
+
+  delay(1000);
+  lsm.begin();
+  configureAngleSensor();
+  updateAngleError();
 
   IrReceiver.begin(IR, ENABLE_LED_FEEDBACK);
 
@@ -225,14 +240,12 @@ void setup() {
   pinMode(BIN1, OUTPUT);
   pinMode(BIN2, OUTPUT);
 
-  updateAngleError();
-
   Sched_Init();
-  Sched_AddT(decodeIR, 1, 100);
-  Sched_AddT(translateIR, 1, 100);
-  Sched_AddT(move, 1, 100);
+  Sched_AddT(decodeIR, 1, 1000);
+  Sched_AddT(translateCommands, 1, 1000);
+  Sched_AddT(move, 1, 1000);
+  Sched_AddT(displayData, 1, 1000);
   Sched_AddT(updateAngle, 1, 100);
-  Sched_AddT(displayData, 1, 100);
 }
 
 void loop() {

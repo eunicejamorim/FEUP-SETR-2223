@@ -19,7 +19,7 @@ Adafruit_LSM9DS0 lsm(1000);
 #define ECHO 4
 #define TRIG 5
 
-#define B_SPEED_OFFSET 7
+#define B_SPEED_OFFSET 4
 
 // SHCEDULER 
 int Sched_AddT(void (*f)(void), int d, int p);
@@ -111,10 +111,10 @@ ISR(TIMER1_COMPA_vect){//timer1 interrupt
 int right_motor = 0;
 int left_motor = 0;
 
-int speed = 100;
+int speed = 50;
 
-int minDist = 30;   // min distance to target in cm
-int tolerance = 2;  // tolerance for the distance in cm
+int minDist = 20;   // min distance to target in cm
+int tolerance = 3;  // tolerance for the distance in cm
 
 int stopped = 0;
 int stopped_distance = 0;
@@ -133,21 +133,22 @@ void configureAngleSensor(void)
 void updateAngleError()
 {
   int c = 200;
+  sensors_event_t gyro;
   for (int i = 0; i < c; i++) {
-    sensors_event_t accel, mag, gyro, temp;
-    lsm.getEvent(&accel, &mag, &gyro, &temp); 
+    delay(10);
+    lsm.getGyro().getEvent(&gyro); 
 
     angleTime = gyro.timestamp;
     angleError += gyro.gyro.z;
-    delay(10);
   }
 
   angleError /= c;
 }
 
 void updateAngle(){
-  sensors_event_t accel, mag, gyro, temp;
-  lsm.getEvent(&accel, &mag, &gyro, &temp); 
+  sensors_event_t gyro;
+  lsm.getGyro().getEvent(&gyro);
+
   long int currentTime = gyro.timestamp;
   long int timeElapsed = currentTime-angleTime;
   angleTime = currentTime;
@@ -164,16 +165,15 @@ void move()
   digitalWrite(BIN2, right_motor > 0 ? HIGH : LOW);
 }
 
-void getDistance()  // Measure the distance
+void getDistance()
 {
-  digitalWrite(TRIG, LOW);  // set trig pin low 2μs
+  digitalWrite(TRIG, LOW);
   delayMicroseconds(2);
-  digitalWrite(TRIG, HIGH);  // set trig pin 10μs , at last 10us
+  digitalWrite(TRIG, HIGH);
   delayMicroseconds(10);
-  digitalWrite(TRIG, LOW);                // set trig pin low
-  float Fdistance = pulseIn(ECHO, HIGH);  // Read echo pin high level time(us)
-  Fdistance = Fdistance / 58;             //Y m=（X s*344）/2
-  // X s=（ 2*Y m）/344 ==》X s=0.0058*Y m ==》cm = us /58
+  digitalWrite(TRIG, LOW);                
+  float Fdistance = pulseIn(ECHO, HIGH);  
+  Fdistance = Fdistance / 58;             
   distance = Fdistance;
 }
 
@@ -197,23 +197,31 @@ void processDistance()
 
 void displayData() {
   display.clearDisplay();
-  display.setCursor(10, 0);
-  display.print("D: "); display.print(distance); display.print("cm A: "); display.print(currentAngle); display.print("dg");
+  display.setCursor(11, 0);
+  display.print(F("D: ")); display.print(distance); display.print(F("cm A: ")); display.print(currentAngle); display.print(F("dg"));
   display.setCursor(0, 16);
-  display.print("Right motor: "); display.print(right_motor);
+  display.print(F("Right motor: ")); display.print(right_motor);
   display.setCursor(0, 32);
-  display.print("Left motor: "); display.print(left_motor);
+  display.print(F("Left motor: ")); display.print(left_motor);
   display.display();
 }
 
 void setup() {
-  lsm.begin();
-  
-  configureAngleSensor();
-
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3D);  // initialize with the I2C addr 0x3D (for the 128x64)
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
   display.setTextSize(1);
   display.setTextColor(WHITE);
+
+  display.clearDisplay();
+  display.setCursor(1, 0);
+  display.print(F("Calibration in 1000ms"));
+  display.setCursor(30, 8);
+  display.print(F("Stand Still"));
+  display.display();
+
+  delay(1000);
+  lsm.begin();
+  configureAngleSensor();
+  updateAngleError();
 
   pinMode(PWMA, OUTPUT);
   pinMode(AIN2, OUTPUT);
@@ -225,14 +233,12 @@ void setup() {
   pinMode(TRIG, OUTPUT);
   pinMode(ECHO, INPUT);
 
-  updateAngleError();
-
   Sched_Init();
-  Sched_AddT(getDistance, 1, 100);
-  Sched_AddT(processDistance, 1, 100);
-  Sched_AddT(move, 1, 100);
-  Sched_AddT(displayData, 1, 100);
-  Sched_AddT(updateAngle, 1, 10);
+  Sched_AddT(getDistance, 1, 1000);
+  Sched_AddT(processDistance, 1, 1000);
+  Sched_AddT(move, 1, 1000);
+  Sched_AddT(displayData, 1, 1000);
+  Sched_AddT(updateAngle, 1, 100);
 }
 
 void loop() {
