@@ -19,7 +19,7 @@ Adafruit_LSM9DS0 lsm(1000);
 #define ECHO 4
 #define TRIG 5
 
-#define B_SPEED_OFFSET 4
+#define B_SPEED_OFFSET 4 // This one kinda unbalanced this counteracts it
 
 // SHCEDULER 
 int Sched_AddT(void (*f)(void), int d, int p);
@@ -197,7 +197,7 @@ void processDistance()
 
 void displayData() {
   display.clearDisplay();
-  display.setCursor(11, 0);
+  display.setCursor(16 - 3 * (abs(currentAngle) < 10 ? 0 : abs(currentAngle) < 100 ? 1 : 2) - (currentAngle < 0 ? 3 : 0) - 3 * (distance < 10 ? 0 : distance < 100 ? 1 : 2), 0);
   display.print(F("D: ")); display.print(distance); display.print(F("cm A: ")); display.print(currentAngle); display.print(F("dg"));
   display.setCursor(0, 16);
   display.print(F("Right motor: ")); display.print(right_motor);

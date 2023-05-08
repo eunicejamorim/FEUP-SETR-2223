@@ -115,12 +115,13 @@ int right_motor = 0;
 int left_motor = 0;
 
 int speed = 50;
-int rotate_speed = 30;
+int rotate_speed = 3;
 
 unsigned int command;
 
 float angleError = 0;
 float currentAngle = 0;
+float targetAngle = 0;
 long int angleTime;
 
 void configureAngleSensor(void)
@@ -160,29 +161,33 @@ void translateCommands()
       left_motor = speed;
       break;
     case KEY4:
-      right_motor = rotate_speed;
-      left_motor = -rotate_speed;
-      currentAngle = 0.0f;
+      right_motor = speed + rotate_speed;
+      left_motor = speed - rotate_speed;
+      targetAngle = currentAngle;
       break;
     case KEY6:
-      right_motor = -rotate_speed;
-      left_motor = rotate_speed;
-      currentAngle = 0.0f;
+      right_motor = speed - rotate_speed;
+      left_motor = speed + rotate_speed;
+      targetAngle = currentAngle;
+      break;
+    case KEY5:
+      right_motor = 0;
+      left_motor = 0;
+      targetAngle = currentAngle;
       break;
     case KEY8:
       right_motor = -speed;
       left_motor = -speed;
       break;
-    case KEY5:
     default:
       right_motor = 0;
       left_motor = 0;
-      currentAngle = 0.0f;
+      targetAngle = currentAngle;
       break;
   }
 
-  right_motor -= currentAngle / 2.5f;
-  left_motor += currentAngle / 2.5f;
+  right_motor -= (currentAngle - targetAngle) / 2.0f;
+  left_motor += (currentAngle - targetAngle) / 2.0f;
 }
 
 void move()
@@ -199,12 +204,13 @@ void decodeIR() {
   if (IrReceiver.decode()) {
       command = IrReceiver.decodedIRData.command;
       IrReceiver.resume();
+      targetAngle = currentAngle;
   }
 }
 
 void displayData() {
   display.clearDisplay();
-  display.setCursor(26 - 3 * (currentAngle < 10 ? 0 : 1), 0);
+  display.setCursor(26 - 3 * (abs(currentAngle) < 10 ? 0 : abs(currentAngle) < 100 ? 1 : 2) - (currentAngle < 0 ? 3 : 0), 0);
   display.print(F("Angle: ")); display.print(currentAngle); display.println(F("dg"));
   display.setCursor(0, 16);
   display.print(F("Right motor: ")); display.println(right_motor);
