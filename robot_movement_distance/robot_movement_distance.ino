@@ -123,6 +123,7 @@ int distance;
 
 float angleError = 0;
 float currentAngle = 0;
+float targetAngle = 0;
 long int angleTime;
 
 void configureAngleSensor(void)
@@ -177,7 +178,7 @@ void getDistance()
   distance = Fdistance;
 }
 
-void processDistance()
+void translateCommands()
 {
   if (stopped ? (distance > stopped_distance + tolerance) : (distance > minDist + tolerance)) {
     right_motor = speed - B_SPEED_OFFSET;
@@ -193,6 +194,9 @@ void processDistance()
     stopped = 1;
     stopped_distance = distance;
   }
+
+  right_motor -= (currentAngle - targetAngle) / 2.0f;
+  left_motor += (currentAngle - targetAngle) / 2.0f;
 }
 
 void displayData() {
@@ -235,7 +239,7 @@ void setup() {
 
   Sched_Init();
   Sched_AddT(getDistance, 1, 1000);
-  Sched_AddT(processDistance, 1, 1000);
+  Sched_AddT(translateCommands, 1, 1000);
   Sched_AddT(move, 1, 1000);
   Sched_AddT(displayData, 1, 1000);
   Sched_AddT(updateAngle, 1, 100);
