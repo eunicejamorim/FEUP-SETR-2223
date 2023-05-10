@@ -210,12 +210,12 @@ void decodeIR() {
 
 void displayData() {
   display.clearDisplay();
-  display.setCursor(26 - 3 * (abs(currentAngle) < 10 ? 0 : abs(currentAngle) < 100 ? 1 : 2) - (currentAngle < 0 ? 3 : 0), 0);
-  display.print(F("Angle: ")); display.print(currentAngle); display.println(F("dg"));
+  display.setCursor(25 - 3 * (abs(currentAngle) < 10 ? 0 : abs(currentAngle) < 100 ? 1 : 2) - (currentAngle < 0 ? 3 : 0), 0);
+  display.print(F("Angle: ")); display.print(currentAngle); display.print(F("dg"));
   display.setCursor(0, 16);
-  display.print(F("Right motor: ")); display.println(right_motor);
+  display.print(F("Right motor: ")); display.print(right_motor);
   display.setCursor(0, 32);
-  display.print(F("Left motor: ")); display.println(left_motor);
+  display.print(F("Left motor: ")); display.print(left_motor);
   display.display();
 }
 

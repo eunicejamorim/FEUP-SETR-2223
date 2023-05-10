@@ -113,13 +113,13 @@ int left_motor = 0;
 
 int speed = 50;
 
-int minDist = 20;   // min distance to target in cm
-int tolerance = 3;  // tolerance for the distance in cm
+float minDist = 20;   // min distance to target in cm
+float tolerance = 3;  // tolerance for the distance in cm
 
 int stopped = 0;
 int stopped_distance = 0;
 
-int distance;
+float distance;
 
 float angleError = 0;
 float currentAngle = 0;
@@ -174,7 +174,7 @@ void getDistance()
   delayMicroseconds(10);
   digitalWrite(TRIG, LOW);                
   float Fdistance = pulseIn(ECHO, HIGH);  
-  Fdistance = Fdistance / 58;             
+  Fdistance = Fdistance * 0.0343 / 2;             
   distance = Fdistance;
 }
 
@@ -201,11 +201,13 @@ void translateCommands()
 
 void displayData() {
   display.clearDisplay();
-  display.setCursor(16 - 3 * (abs(currentAngle) < 10 ? 0 : abs(currentAngle) < 100 ? 1 : 2) - (currentAngle < 0 ? 3 : 0) - 3 * (distance < 10 ? 0 : distance < 100 ? 1 : 2), 0);
-  display.print(F("D: ")); display.print(distance); display.print(F("cm A: ")); display.print(currentAngle); display.print(F("dg"));
-  display.setCursor(0, 16);
+  display.setCursor(17 - 3 * (distance < 10 ? 0 : distance < 100 ? 1 : 2), 0);
+  display.print(F("Distance: ")); display.print(distance); display.print(F("cm"));
+  display.setCursor(25 - 3 * (abs(currentAngle) < 10 ? 0 : abs(currentAngle) < 100 ? 1 : 2) - (currentAngle < 0 ? 3 : 0), 8);
+  display.print(F("Angle: ")); display.print(currentAngle); display.print(F("dg"));
+  display.setCursor(0, 24);
   display.print(F("Right motor: ")); display.print(right_motor);
-  display.setCursor(0, 32);
+  display.setCursor(0, 40);
   display.print(F("Left motor: ")); display.print(left_motor);
   display.display();
 }
