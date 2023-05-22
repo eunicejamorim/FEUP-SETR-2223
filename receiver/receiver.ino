@@ -18,15 +18,12 @@ ISR(TIMER1_COMPA_vect) {
         case IDLE:
             break;
         case INIT_BIT:
-            interrupt_count = 0;
-            if (digitalRead(2) == LOW) {
+            interrupt_count++;
+            if (interrupt_count >= (INTERRUPTS_PER_BIT - 1) / 2) {
+                interrupt_count = 0;
                 buffer = 0;
                 bits_received = 0;
                 state = BYTE;
-            } else {
-                Serial.println("> COMMS ERROR: Initial bit not LOW");
-                state = IDLE;
-                attachInterrupt(digitalPinToInterrupt(2), start_receiving, FALLING);
             }
             break;
         case BYTE:
@@ -57,9 +54,10 @@ ISR(TIMER1_COMPA_vect) {
 }
 
 void start_receiving() {
-    Serial.println(digitalRead(2));
-    detachInterrupt(digitalPinToInterrupt(2));
-    state = INIT_BIT;
+    if (digitalRead(2) == LOW) {
+        detachInterrupt(digitalPinToInterrupt(2));
+        state = INIT_BIT;
+    }
 }
 
 void setup() {

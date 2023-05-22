@@ -43,7 +43,7 @@ ISR(TIMER1_COMPA_vect) {
         case FINAL_BIT:
             digitalWrite(2, HIGH);
             interrupt_count++;
-            if (interrupt_count >= (INTERRUPTS_PER_BIT - 1) * 2) {
+            if (interrupt_count >= (INTERRUPTS_PER_BIT - 1) * 4) {
                 interrupt_count = 0;
                 state = IDLE;
             }
@@ -51,7 +51,7 @@ ISR(TIMER1_COMPA_vect) {
     }
 }
 
-void send_byte(uint8_t byte) {
+void send_byte(signed char byte) {
     if (state == IDLE) {
         state = INIT_BIT;
         buffer = byte;
@@ -73,6 +73,6 @@ void setup() {
 }
 
 void loop() {
-    delay(1000);
-    send_byte(0b01010011);
+    delay(1);
+    send_byte(-58);
 }
