@@ -16,13 +16,25 @@ Adafruit_LSM9DS0 lsm(1000);  // Use I2C, ID #1000
 #define PWMB 11  //Right Motor Speed pin (ENB)
 #define BIN1 A2  //Motor-R forward (IN3)
 #define BIN2 A3  //Motor-R backward (IN4)
-#define IR 7
+#define IR 5
 
 #define KEY2 0x18  //Key:2
 #define KEY8 0x52  //Key:8
 #define KEY4 0x08  //Key:4
 #define KEY6 0x5A  //Key:6
 #define KEY5 0x1C  //Key:5
+
+#define CPU_FREQ 16000000L      // cpu clock
+#define PRESCALER 256           // cpu prescaler
+#define BAUD_RATE 10            // comms baud rate
+#define INTERRUPT_INTERVAL 1    // interrupt every X miliseconds
+
+const unsigned long TICKS_PER_MILISEC = ( CPU_FREQ / PRESCALER ) / 1000;
+const unsigned short TICKS_PER_INTERRUPT = INTERRUPT_INTERVAL * TICKS_PER_MILISEC - 1;  // amount of ticks in an interrupt interval
+const unsigned short INTERRUPTS_PER_BIT = 1000 / (BAUD_RATE * INTERRUPT_INTERVAL);
+
+volatile enum CommsState { IDLE, INIT_BIT, BYTE, PARITY_BIT, FINAL_BIT } state = IDLE;
+int buffer = 0;
 
 // SHCEDULER 
 int Sched_AddT(void (*f)(void), int d, int p);
@@ -45,19 +57,16 @@ int cur_task = NT;
 int Sched_Init(void){
   for(int x=0; x<NT; x++)
     Tasks[x].func = 0;
-  /* Also configures interrupt that periodically calls Sched_Schedule(). */
-  noInterrupts(); // disable all interrupts
-  TCCR1A = 0;
-  TCCR1B = 0;
-  TCNT1 = 0;
- 
-//OCR1A = 6250; // compare match register 16MHz/256/10Hz
-//OCR1A = 31250; // compare match register 16MHz/256/2Hz
-  OCR1A = 31;    // compare match register 16MHz/256/2kHz
-  TCCR1B |= (1 << WGM12); // CTC mode
-  TCCR1B |= (1 << CS12); // 256 prescaler
-  TIMSK1 |= (1 << OCIE1A); // enable timer compare interrupt
-  interrupts(); // enable all interrupts  
+  
+  noInterrupts();
+  TCNT1 = 0;                  // delete timer counter register
+  TCCR1A = 0;                 // delete TCCR1A-Registers
+  TCCR1B = 0;                 // delete TCCR1B-Registers
+  TCCR1B |= (1 << WGM12);     // CTC-Mode (Waveform Generation Mode): resets TCNT1 to0 after interrupt, makes OCR1A the leading compare register
+  TCCR1B |= (1 << CS12);      // set prescaler to 256
+  TIMSK1 |= (1 << OCIE1A);    // enable interrupts
+  OCR1A = TICKS_PER_INTERRUPT;
+  interrupts();
 }
 
 int Sched_AddT(void (*f)(void), int d, int p){
@@ -104,11 +113,64 @@ void Sched_Dispatch(void){
   }
 }
 
+void comms_isr() {
+  static int interrupt_count = 0;
+  static int bits_sent = 0;
+  static int parity_bit = 0;
+
+  switch (state) {
+    case IDLE:
+      digitalWrite(7, HIGH);
+      break;
+    case INIT_BIT:
+      digitalWrite(7, LOW);
+      interrupt_count++;
+      if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
+        interrupt_count = 0;
+        bits_sent = 0;
+        state = BYTE;
+      }
+      break;
+    case BYTE:
+      digitalWrite(7, buffer & 1);
+      interrupt_count++;
+      if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
+        interrupt_count = 0;
+        parity_bit ^= buffer & 1;
+        bits_sent++;
+        if (bits_sent < 10) {
+          buffer >>= 1;
+        } else {
+          state = PARITY_BIT;
+          // Serial.print("Parity bit: "); Serial.println(parity_bit);
+        }
+      }
+      break;
+    case PARITY_BIT:
+      digitalWrite(7, parity_bit);
+      interrupt_count++;
+      if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
+        interrupt_count = 0;
+        parity_bit = 0;
+        state = FINAL_BIT;
+      }
+      break;
+    case FINAL_BIT:
+      digitalWrite(7, HIGH);
+      interrupt_count++;
+      if (interrupt_count >= (INTERRUPTS_PER_BIT - 1) * 4) {
+        interrupt_count = 0;
+        state = IDLE;
+      }
+      break;
+  }
+}
+
 ISR(TIMER1_COMPA_vect){//timer1 interrupt
+  comms_isr();
   Sched_Schedule();
   Sched_Dispatch();
 }
-
 
 // CODE
 int right_motor = 0;
@@ -123,6 +185,15 @@ float angleError = 0;
 float currentAngle = 0;
 float targetAngle = 0;
 long int angleTime;
+
+void sendByte() {
+  if (state == IDLE) {
+    state = INIT_BIT;
+    buffer = currentAngle < 0 ? currentAngle * -100 : currentAngle * 100;
+    buffer |= (currentAngle < 0) << 9;
+    // Serial.print("Sending: "); Serial.println(buffer, BIN);
+  }
+}
 
 void configureAngleSensor(void)
 {
@@ -150,7 +221,7 @@ void updateAngle(){
   long int currentTime = gyro.timestamp;
   long int timeElapsed = currentTime-angleTime;
   angleTime = currentTime;
-  currentAngle += 180 * (gyro.gyro.z - angleError) / M_PI * (timeElapsed) * 0.001;
+  currentAngle += (gyro.gyro.z - angleError) * timeElapsed * 0.001;
 }
 
 void translateCommands()
@@ -186,8 +257,8 @@ void translateCommands()
       break;
   }
 
-  right_motor -= (currentAngle - targetAngle) / 2.0f;
-  left_motor += (currentAngle - targetAngle) / 2.0f;
+  right_motor -= (currentAngle - targetAngle) * 20.0f;
+  left_motor += (currentAngle - targetAngle) * 20.0f;
 }
 
 void move()
@@ -211,7 +282,7 @@ void decodeIR() {
 void displayData() {
   display.clearDisplay();
   display.setCursor(25 - 3 * (abs(currentAngle) < 10 ? 0 : abs(currentAngle) < 100 ? 1 : 2) - (currentAngle < 0 ? 3 : 0), 0);
-  display.print(F("Angle: ")); display.print(currentAngle); display.print(F("dg"));
+  display.print(F("Angle: ")); display.print(180 * currentAngle / M_PI); display.print(F("dg"));
   display.setCursor(0, 16);
   display.print(F("Right motor: ")); display.print(right_motor);
   display.setCursor(0, 32);
@@ -247,11 +318,12 @@ void setup() {
   pinMode(BIN2, OUTPUT);
 
   Sched_Init();
-  Sched_AddT(decodeIR, 1, 1000);
-  Sched_AddT(translateCommands, 1, 1000);
-  Sched_AddT(move, 1, 1000);
-  Sched_AddT(displayData, 1, 1000);
-  Sched_AddT(updateAngle, 1, 100);
+  Sched_AddT(decodeIR, 1, 500);
+  Sched_AddT(translateCommands, 1, 500);
+  Sched_AddT(move, 1, 500);
+  Sched_AddT(displayData, 1, 500);
+  Sched_AddT(updateAngle, 1, 50);
+  Sched_AddT(sendByte, 1, 500);
 }
 
 void loop() {
