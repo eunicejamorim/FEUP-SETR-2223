@@ -268,8 +268,8 @@ void translateCommands()
     stopped_distance = distance;
   }
 
-  right_motor -= (currentAngle - targetAngle) / 2.0f;
-  left_motor += (currentAngle - targetAngle) / 2.0f;
+  right_motor -= (currentAngle - targetAngle) * 15.0f;
+  left_motor += (currentAngle - targetAngle) * 15.0f;
 }
 
 void processAngleCarFront() {

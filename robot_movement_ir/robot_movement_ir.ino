@@ -252,8 +252,8 @@ void translateCommands()
       break;
   }
 
-  right_motor -= (currentAngle - targetAngle) * 20.0f;
-  left_motor += (currentAngle - targetAngle) * 20.0f;
+  right_motor -= (currentAngle - targetAngle) * 15.0f;
+  left_motor += (currentAngle - targetAngle) * 15.0f;
 }
 
 void move()
