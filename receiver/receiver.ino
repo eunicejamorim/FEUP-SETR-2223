@@ -13,6 +13,7 @@ uint8_t buffer = 0;
 ISR(TIMER1_COMPA_vect) {
     static int interrupt_count = 0;
     static int bits_received = 0;
+    static int parity = 0;
 
     switch (state) {
         case IDLE:
@@ -30,7 +31,7 @@ ISR(TIMER1_COMPA_vect) {
             interrupt_count++;
             if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
                 interrupt_count = 0;
-                buffer |= digitalRead(2) << bits_received;
+                buffer |= digitalRead(7) << bits_received;
                 bits_received++;
                 if (bits_received == 8) {
                     state = FINAL_BIT;
@@ -41,28 +42,28 @@ ISR(TIMER1_COMPA_vect) {
             interrupt_count++;
             if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
                 interrupt_count = 0;
-                if (digitalRead(2) == HIGH) {
+                if (digitalRead(7) == HIGH) {
                     Serial.println(buffer);
                 } else {
                     Serial.println("> COMMS ERROR: Final bit not HIGH");
                 }
                 state = IDLE;
-                attachInterrupt(digitalPinToInterrupt(2), start_receiving, FALLING);
+                attachInterrupt(digitalPinToInterrupt(7), start_receiving, FALLING);
             }
             break;
     }
 }
 
 void start_receiving() {
-    if (digitalRead(2) == LOW) {
-        detachInterrupt(digitalPinToInterrupt(2));
+    if (digitalRead(7) == LOW) {
+        detachInterrupt(digitalPinToInterrupt(7));
         state = INIT_BIT;
     }
 }
 
 void setup() {
     Serial.begin(9600);
-    attachInterrupt(digitalPinToInterrupt(2), start_receiving, FALLING); 
+    attachInterrupt(digitalPinToInterrupt(7), start_receiving, FALLING); 
 
     noInterrupts();
     TCNT1 = 0;                  // delete timer counter register

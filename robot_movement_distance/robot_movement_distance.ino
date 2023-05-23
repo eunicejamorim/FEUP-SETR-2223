@@ -21,6 +21,18 @@ Adafruit_LSM9DS0 lsm(1000);
 
 #define B_SPEED_OFFSET 4 // This one kinda unbalanced this counteracts it
 
+#define CPU_FREQ 16000000L      // cpu clock
+#define PRESCALER 256           // cpu prescaler
+#define BAUD_RATE 10            // comms baud rate
+#define INTERRUPT_INTERVAL 1    // interrupt every X miliseconds
+
+const unsigned long TICKS_PER_MILISEC = ( CPU_FREQ / PRESCALER ) / 1000;
+const unsigned short TICKS_PER_INTERRUPT = INTERRUPT_INTERVAL * TICKS_PER_MILISEC - 1;  // amount of ticks in an interrupt interval
+const unsigned short INTERRUPTS_PER_BIT = 1000 / (BAUD_RATE * INTERRUPT_INTERVAL);
+
+volatile enum CommsState { IDLE, INIT_BIT, BYTE, PARITY_BIT, FINAL_BIT } state = IDLE;
+int buffer = 0;
+
 // SHCEDULER 
 int Sched_AddT(void (*f)(void), int d, int p);
 
@@ -42,19 +54,15 @@ int cur_task = NT;
 int Sched_Init(void){
   for(int x=0; x<NT; x++)
     Tasks[x].func = 0;
-  /* Also configures interrupt that periodically calls Sched_Schedule(). */
-  noInterrupts(); // disable all interrupts
-  TCCR1A = 0;
-  TCCR1B = 0;
-  TCNT1 = 0;
- 
-//OCR1A = 6250; // compare match register 16MHz/256/10Hz
-//OCR1A = 31250; // compare match register 16MHz/256/2Hz
-  OCR1A = 31;    // compare match register 16MHz/256/2kHz
-  TCCR1B |= (1 << WGM12); // CTC mode
-  TCCR1B |= (1 << CS12); // 256 prescaler
-  TIMSK1 |= (1 << OCIE1A); // enable timer compare interrupt
-  interrupts(); // enable all interrupts  
+  noInterrupts();
+  TCNT1 = 0;                  // delete timer counter register
+  TCCR1A = 0;                 // delete TCCR1A-Registers
+  TCCR1B = 0;                 // delete TCCR1B-Registers
+  TCCR1B |= (1 << WGM12);     // CTC-Mode (Waveform Generation Mode): resets TCNT1 to0 after interrupt, makes OCR1A the leading compare register
+  TCCR1B |= (1 << CS12);      // set prescaler to 256
+  TIMSK1 |= (1 << OCIE1A);    // enable interrupts
+  OCR1A = TICKS_PER_INTERRUPT;
+  interrupts();
 }
 
 int Sched_AddT(void (*f)(void), int d, int p){
@@ -101,7 +109,65 @@ void Sched_Dispatch(void){
   }
 }
 
+float frontCarAngle = 0;
+
+void comms_isr() {
+  static int interrupt_count = 0;
+  static int bits_received = 0;
+  static int parity = 0;
+  static int parity_received = 0;
+
+  switch (state) {
+      case IDLE:
+          break;
+      case INIT_BIT:
+          interrupt_count++;
+          if (interrupt_count >= (INTERRUPTS_PER_BIT - 1) / 2) {
+              interrupt_count = 0;
+              buffer = 0;
+              bits_received = 0;
+              state = BYTE;
+          }
+          break;
+      case BYTE:
+          interrupt_count++;
+          if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
+              interrupt_count = 0;
+              int r = digitalRead(7);
+              if (bits_received == 9 && r) buffer = -buffer;
+              else buffer |= r << bits_received;
+              parity ^= r;
+              bits_received++;
+              if (bits_received == 10) {
+                  state = PARITY_BIT;
+              }
+          }
+          break;
+      case PARITY_BIT:
+        interrupt_count++;
+        if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
+              interrupt_count = 0;
+              parity_received = digitalRead(7);
+              state = FINAL_BIT;
+          }
+        break;
+      case FINAL_BIT:
+          interrupt_count++;
+          if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
+              interrupt_count = 0;
+              if (digitalRead(7) == HIGH && parity_received == (parity & 1)) {
+                  frontCarAngle = (float)(buffer) / 100.0f;
+              }
+              parity = 0;
+              state = IDLE;
+              attachInterrupt(digitalPinToInterrupt(7), start_receiving, FALLING);
+          }
+          break;
+  }
+}
+
 ISR(TIMER1_COMPA_vect){//timer1 interrupt
+  comms_isr();
   Sched_Schedule();
   Sched_Dispatch();
 }
@@ -124,8 +190,14 @@ float distance;
 float angleError = 0;
 float currentAngle = 0;
 float targetAngle = 0;
-float frontCarAngle = 0;
 long int angleTime;
+
+void start_receiving() {
+    if (digitalRead(7) == LOW) {
+        detachInterrupt(digitalPinToInterrupt(7));
+        state = INIT_BIT;
+    }
+}
 
 void configureAngleSensor(void)
 {
@@ -154,7 +226,7 @@ void updateAngle(){
   long int currentTime = gyro.timestamp;
   long int timeElapsed = currentTime-angleTime;
   angleTime = currentTime;
-  currentAngle += 180 * (gyro.gyro.z - angleError) / M_PI * (timeElapsed) * 0.001;
+  currentAngle += (gyro.gyro.z - angleError) * (timeElapsed) * 0.001;
 }
 
 void move()
@@ -202,9 +274,9 @@ void translateCommands()
 
 void processAngleCarFront() {
   float smallDistance = 5.0f;
-  float carAngleRad = PI - frontCarAngle * 1000.0f / 57296.0f;
+  float carAngleRad = PI - frontCarAngle;
   float hip = sqrtf(distance * distance + smallDistance * smallDistance - 2.0f * distance * smallDistance * cosf(carAngleRad));
-  targetAngle = asinf(sinf(carAngleRad) * smallDistance / hip) * 57296.0f / 1000.0f;
+  targetAngle = asinf(sinf(carAngleRad) * smallDistance / hip);
 }
 
 void displayData() {
@@ -212,7 +284,7 @@ void displayData() {
   display.setCursor(17 - 3 * (distance < 10 ? 0 : distance < 100 ? 1 : 2), 0);
   display.print(F("Distance: ")); display.print(distance); display.print(F("cm"));
   display.setCursor(25 - 3 * (abs(currentAngle) < 10 ? 0 : abs(currentAngle) < 100 ? 1 : 2) - (currentAngle < 0 ? 3 : 0), 8);
-  display.print(F("Angle: ")); display.print(currentAngle); display.print(F("dg"));
+  display.print(F("Angle: ")); display.print(currentAngle * 180 / M_PI); display.print(F("dg"));
   display.setCursor(0, 24);
   display.print(F("Right motor: ")); display.print(right_motor);
   display.setCursor(0, 40);
@@ -221,6 +293,9 @@ void displayData() {
 }
 
 void setup() {
+  Serial.begin(9600);
+  attachInterrupt(digitalPinToInterrupt(7), start_receiving, FALLING);
+
   display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
   display.setTextSize(1);
   display.setTextColor(WHITE);
@@ -248,12 +323,12 @@ void setup() {
   pinMode(ECHO, INPUT);
 
   Sched_Init();
-  Sched_AddT(getDistance, 1, 1000);
-  Sched_AddT(translateCommands, 1, 1000);
-  Sched_AddT(move, 1, 1000);
-  Sched_AddT(displayData, 1, 1000);
-  Sched_AddT(processAngleCarFront, 1, 1000);
-  Sched_AddT(updateAngle, 1, 100);
+  Sched_AddT(getDistance, 1, 500);
+  Sched_AddT(translateCommands, 1, 500);
+  Sched_AddT(move, 1, 500);
+  Sched_AddT(displayData, 1, 500);
+  Sched_AddT(processAngleCarFront, 1, 500);
+  Sched_AddT(updateAngle, 1, 50);
 }
 
 void loop() {
