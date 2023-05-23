@@ -241,19 +241,14 @@ void translateCommands()
       left_motor = speed + rotate_speed;
       targetAngle = currentAngle;
       break;
-    case KEY5:
-      right_motor = 0;
-      left_motor = 0;
-      targetAngle = currentAngle;
-      break;
     case KEY8:
       right_motor = -speed;
       left_motor = -speed;
       break;
+    case KEY5:
     default:
       right_motor = 0;
       left_motor = 0;
-      targetAngle = currentAngle;
       break;
   }
 
