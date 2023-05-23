@@ -16,7 +16,7 @@ Adafruit_LSM9DS0 lsm(1000);  // Use I2C, ID #1000
 #define PWMB 11  //Right Motor Speed pin (ENB)
 #define BIN1 A2  //Motor-R forward (IN3)
 #define BIN2 A3  //Motor-R backward (IN4)
-#define IR 7
+#define IR 5
 
 #define KEY2 0x18  //Key:2
 #define KEY8 0x52  //Key:8
@@ -170,19 +170,14 @@ void translateCommands()
       left_motor = speed + rotate_speed;
       targetAngle = currentAngle;
       break;
-    case KEY5:
-      right_motor = 0;
-      left_motor = 0;
-      targetAngle = currentAngle;
-      break;
     case KEY8:
       right_motor = -speed;
       left_motor = -speed;
       break;
+    case KEY5:
     default:
       right_motor = 0;
       left_motor = 0;
-      targetAngle = currentAngle;
       break;
   }
 

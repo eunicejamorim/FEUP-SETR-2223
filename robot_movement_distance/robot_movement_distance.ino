@@ -124,6 +124,7 @@ float distance;
 float angleError = 0;
 float currentAngle = 0;
 float targetAngle = 0;
+float frontCarAngle = 0;
 long int angleTime;
 
 void configureAngleSensor(void)
@@ -199,6 +200,13 @@ void translateCommands()
   left_motor += (currentAngle - targetAngle) / 2.0f;
 }
 
+void processAngleCarFront() {
+  float smallDistance = 5.0f;
+  float carAngleRad = PI - frontCarAngle * 1000.0f / 57296.0f;
+  float hip = sqrtf(distance * distance + smallDistance * smallDistance - 2.0f * distance * smallDistance * cosf(carAngleRad));
+  targetAngle = asinf(sinf(carAngleRad) * smallDistance / hip) * 57296.0f / 1000.0f;
+}
+
 void displayData() {
   display.clearDisplay();
   display.setCursor(17 - 3 * (distance < 10 ? 0 : distance < 100 ? 1 : 2), 0);
@@ -244,6 +252,7 @@ void setup() {
   Sched_AddT(translateCommands, 1, 1000);
   Sched_AddT(move, 1, 1000);
   Sched_AddT(displayData, 1, 1000);
+  Sched_AddT(processAngleCarFront, 1, 1000);
   Sched_AddT(updateAngle, 1, 100);
 }
 
