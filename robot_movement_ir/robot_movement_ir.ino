@@ -316,7 +316,7 @@ void setup() {
   Sched_AddT(move, 1, 50);
   Sched_AddT(displayData, 1, 500);
   Sched_AddT(updateAngle, 1, 10);
-  Sched_AddT(sendByte, 1, 50);
+  Sched_AddT(sendByte, 1, 10);
 }
 
 void loop() {

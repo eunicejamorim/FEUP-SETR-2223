@@ -152,17 +152,19 @@ void comms_isr() {
           }
         break;
       case FINAL_BIT:
-          interrupt_count++;
-          if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
-              interrupt_count = 0;
-              if (digitalRead(7) == HIGH && parity_received == (parity & 1)) {
-                  frontCarAngle = (float)(buffer) / 100.0f;
-              }
-              parity = 0;
-              state = IDLE;
-              attachInterrupt(digitalPinToInterrupt(7), start_receiving, FALLING);
-          }
-          break;
+        interrupt_count++;
+        if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
+            interrupt_count = 0;
+            if (digitalRead(7) == HIGH && parity_received == (parity & 1)) {
+                frontCarAngle = (float)(buffer) / 100.0f;
+                //Serial.println(frontCarAngle);
+            }
+            parity_received = 0;
+            parity = 0;
+            state = IDLE;
+            attachInterrupt(digitalPinToInterrupt(7), start_receiving, FALLING);
+        }
+        break;
   }
 }
 
@@ -278,10 +280,7 @@ void translateCommands()
 }
 
 void processAngleCarFront() {
-  float smallDistance = 5.0f;
-  float carAngleRad = PI - frontCarAngle;
-  float hip = sqrtf(distance * distance + smallDistance * smallDistance - 2.0f * distance * smallDistance * cosf(carAngleRad));
-  targetAngle = asinf(sinf(carAngleRad) * smallDistance / hip);
+  targetAngle = frontCarAngle > 0 ? frontCarAngle + 0.08 : frontCarAngle - 0.08;
 }
 
 void displayData() {
@@ -298,8 +297,7 @@ void displayData() {
 }
 
 void setup() {
-  attachInterrupt(digitalPinToInterrupt(7), start_receiving, FALLING);
-
+  Serial.begin(9600);
   display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
   display.setTextSize(1);
   display.setTextColor(WHITE);
@@ -325,6 +323,8 @@ void setup() {
 
   pinMode(TRIG, OUTPUT);
   pinMode(ECHO, INPUT);
+
+  attachInterrupt(digitalPinToInterrupt(7), start_receiving, FALLING);
 
   Sched_Init();
   Sched_AddT(getDistance, 1, 100);
