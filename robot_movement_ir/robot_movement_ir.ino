@@ -142,7 +142,6 @@ void comms_isr() {
           buffer >>= 1;
         } else {
           state = PARITY_BIT;
-          // Serial.print("Parity bit: "); Serial.println(parity_bit);
         }
       }
       break;
@@ -188,10 +187,9 @@ long int angleTime;
 
 void sendByte() {
   if (state == IDLE) {
-    state = INIT_BIT;
     buffer = currentAngle < 0 ? currentAngle * -100 : currentAngle * 100;
     buffer |= (currentAngle < 0) << 9;
-    // Serial.print("Sending: "); Serial.println(buffer, BIN);
+    state = INIT_BIT;
   }
 }
 
@@ -205,7 +203,7 @@ void updateAngleError()
   int c = 200;
   sensors_event_t gyro;
   for (int i = 0; i < c; i++) {
-    delay(10);
+    delay(20);
     lsm.getGyro().getEvent(&gyro);
 
     angleTime = gyro.timestamp;
@@ -252,8 +250,8 @@ void translateCommands()
       break;
   }
 
-  right_motor -= (currentAngle - targetAngle) * 15.0f;
-  left_motor += (currentAngle - targetAngle) * 15.0f;
+  right_motor -= (currentAngle - targetAngle) * 30.0f;
+  left_motor += (currentAngle - targetAngle) * 30.0f;
 }
 
 void move()
@@ -313,12 +311,12 @@ void setup() {
   pinMode(BIN2, OUTPUT);
 
   Sched_Init();
-  Sched_AddT(decodeIR, 1, 500);
-  Sched_AddT(translateCommands, 1, 500);
-  Sched_AddT(move, 1, 500);
+  Sched_AddT(decodeIR, 1, 50);
+  Sched_AddT(translateCommands, 1, 50);
+  Sched_AddT(move, 1, 50);
   Sched_AddT(displayData, 1, 500);
-  Sched_AddT(updateAngle, 1, 50);
-  Sched_AddT(sendByte, 1, 500);
+  Sched_AddT(updateAngle, 1, 10);
+  Sched_AddT(sendByte, 1, 50);
 }
 
 void loop() {

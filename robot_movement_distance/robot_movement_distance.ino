@@ -19,7 +19,7 @@ Adafruit_LSM9DS0 lsm(1000);
 #define ECHO 4
 #define TRIG 5
 
-#define B_SPEED_OFFSET 4 // This one kinda unbalanced this counteracts it
+#define B_SPEED_OFFSET 5 // This one kinda unbalanced this counteracts it
 
 #define CPU_FREQ 16000000L      // cpu clock
 #define PRESCALER 256           // cpu prescaler
@@ -209,7 +209,7 @@ void updateAngleError()
   int c = 200;
   sensors_event_t gyro;
   for (int i = 0; i < c; i++) {
-    delay(10);
+    delay(20);
     lsm.getGyro().getEvent(&gyro); 
 
     angleTime = gyro.timestamp;
@@ -247,7 +247,12 @@ void getDistance()
   delayMicroseconds(10);
   digitalWrite(TRIG, LOW);                
   float Fdistance = pulseIn(ECHO, HIGH);  
-  Fdistance = Fdistance * 0.0343 / 2;             
+  Fdistance = Fdistance * 0.0343f / 2.0f;    
+           
+  if (Fdistance > 200.0f) {
+    return;
+  }
+
   distance = Fdistance;
 }
 
@@ -268,8 +273,8 @@ void translateCommands()
     stopped_distance = distance;
   }
 
-  right_motor -= (currentAngle - targetAngle) * 15.0f;
-  left_motor += (currentAngle - targetAngle) * 15.0f;
+  right_motor -= (currentAngle - targetAngle) * 30.0f;
+  left_motor += (currentAngle - targetAngle) * 30.0f;
 }
 
 void processAngleCarFront() {
@@ -293,7 +298,6 @@ void displayData() {
 }
 
 void setup() {
-  Serial.begin(9600);
   attachInterrupt(digitalPinToInterrupt(7), start_receiving, FALLING);
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
@@ -323,12 +327,12 @@ void setup() {
   pinMode(ECHO, INPUT);
 
   Sched_Init();
-  Sched_AddT(getDistance, 1, 500);
-  Sched_AddT(translateCommands, 1, 500);
-  Sched_AddT(move, 1, 500);
+  Sched_AddT(getDistance, 1, 100);
+  Sched_AddT(translateCommands, 1, 50);
+  Sched_AddT(move, 1, 50);
   Sched_AddT(displayData, 1, 500);
-  Sched_AddT(processAngleCarFront, 1, 500);
-  Sched_AddT(updateAngle, 1, 50);
+  Sched_AddT(updateAngle, 1, 10);
+  Sched_AddT(processAngleCarFront, 1, 50);
 }
 
 void loop() {
