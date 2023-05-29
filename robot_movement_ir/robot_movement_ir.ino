@@ -127,6 +127,7 @@ void comms_isr() {
         if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
             interrupt_count = 0;
             bits_sent = 0;
+            parity_bit = 0;
             state = BYTE;
         }
         break;
@@ -149,7 +150,6 @@ void comms_isr() {
         interrupt_count++;
         if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
             interrupt_count = 0;
-            parity_bit = 0;
             state = FINAL_BIT;
         }
         break;
