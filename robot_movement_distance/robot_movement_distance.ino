@@ -134,15 +134,16 @@ void comms_isr() {
         if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
             interrupt_count = 0;
             int r = digitalRead(7);
-            bits_received++;
-            buffer |= r << bits_received;
             parity ^= r;
-            if (bits_received == 9) {
+            if (bits_received == 8) {
                 if (r) {
                     buffer = -buffer;
                 }
                 state = PARITY_BIT;
+            } else {
+                buffer |= r << bits_received;
             }
+            bits_received++;
         }
         break;
     case PARITY_BIT:
@@ -155,10 +156,11 @@ void comms_isr() {
         break;
     case FINAL_BIT:
         interrupt_count++;
-        if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
+        if (interrupt_count >= (INTERRUPTS_PER_BIT - 1) * 2) {
             interrupt_count = 0;
             if (digitalRead(7) == HIGH && parity_received == parity) {  // Otherwise ignore packet
                 frontCarAngle = (float)(buffer) / 100.0f;
+                //Serial.println(frontCarAngle);
             }
             state = IDLE;
             attachInterrupt(digitalPinToInterrupt(7), start_receiving, FALLING);
@@ -266,11 +268,12 @@ void translateCommands() {
         stopped_distance = distance;
     }
 
-    right_motor -= (currentAngle - targetAngle) * 30.0f;
-    left_motor += (currentAngle - targetAngle) * 30.0f;
+    float turningSpeed = constrain((currentAngle - targetAngle) * 30.0f, -30, 30);
+    right_motor -= turningSpeed;
+    left_motor += turningSpeed;
 }
 
-void processAngleCarFront() { targetAngle = frontCarAngle > 0 ? frontCarAngle + 0.08 : frontCarAngle - 0.08; }
+void processAngleCarFront() { targetAngle = (frontCarAngle > 0 ? frontCarAngle + 0.08 : frontCarAngle - 0.08); }
 
 void displayData() {
     display.clearDisplay();
@@ -292,7 +295,7 @@ void displayData() {
 }
 
 void setup() {
-    Serial.begin(9600);
+    //Serial.begin(9600);
     display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
     display.setTextSize(1);
     display.setTextColor(WHITE);

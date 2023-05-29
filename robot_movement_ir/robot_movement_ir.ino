@@ -137,10 +137,10 @@ void comms_isr() {
             interrupt_count = 0;
             parity_bit ^= buffer & 1;
             bits_sent++;
-            if (bits_sent < 9) {
-                buffer >>= 1;
-            } else {
+            if (bits_sent == 9) {
                 state = PARITY_BIT;
+            } else {
+                buffer >>= 1;
             }
         }
         break;
@@ -187,7 +187,7 @@ long int angleTime;
 void sendByte() {
     if (state == IDLE) {
         buffer = currentAngle < 0 ? currentAngle * -100 : currentAngle * 100;
-        buffer |= (currentAngle < 0) << 9;
+        buffer |= (currentAngle < 0) << 8;
         state = INIT_BIT;
     }
 }
