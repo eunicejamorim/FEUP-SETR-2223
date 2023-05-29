@@ -122,9 +122,10 @@ void comms_isr() {
     case INIT_BIT:
         interrupt_count++;
         if (interrupt_count >= (INTERRUPTS_PER_BIT - 1) / 2) {
-            interrupt_count = 0;
             buffer = 0;
+            interrupt_count = 0;
             bits_received = 0;
+            parity = 0;
             state = BYTE;
         }
         break;
@@ -133,13 +134,13 @@ void comms_isr() {
         if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
             interrupt_count = 0;
             int r = digitalRead(7);
-            if (bits_received == 9 && r)
-                buffer = -buffer;
-            else
-                buffer |= r << bits_received;
-            parity ^= r;
             bits_received++;
-            if (bits_received == 10) {
+            buffer |= r << bits_received;
+            parity ^= r;
+            if (bits_received == 9) {
+                if (r) {
+                    buffer = -buffer;
+                }
                 state = PARITY_BIT;
             }
         }
@@ -156,11 +157,9 @@ void comms_isr() {
         interrupt_count++;
         if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
             interrupt_count = 0;
-            if (digitalRead(7) == HIGH && parity_received == (parity & 1)) {
+            if (digitalRead(7) == HIGH && parity_received == parity) {  // Otherwise ignore packet
                 frontCarAngle = (float)(buffer) / 100.0f;
             }
-            parity_received = 0;
-            parity = 0;
             state = IDLE;
             attachInterrupt(digitalPinToInterrupt(7), start_receiving, FALLING);
         }

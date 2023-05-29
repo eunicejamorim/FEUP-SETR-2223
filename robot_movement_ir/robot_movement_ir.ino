@@ -137,7 +137,7 @@ void comms_isr() {
             interrupt_count = 0;
             parity_bit ^= buffer & 1;
             bits_sent++;
-            if (bits_sent < 10) {
+            if (bits_sent < 9) {
                 buffer >>= 1;
             } else {
                 state = PARITY_BIT;
