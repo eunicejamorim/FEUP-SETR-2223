@@ -16,7 +16,8 @@ Adafruit_LSM9DS0 lsm(1000); // Use I2C, ID #1000
 #define PWMB 11 // Right Motor Speed pin (ENB)
 #define BIN1 A2 // Motor-R forward (IN3)
 #define BIN2 A3 // Motor-R backward (IN4)
-#define IR 5
+#define IR_RECEIVER 5
+#define IR_TRANSMITTER 12
 
 #define KEY2 0x18 // Key:2
 #define KEY8 0x52 // Key:8
@@ -31,10 +32,6 @@ Adafruit_LSM9DS0 lsm(1000); // Use I2C, ID #1000
 
 const unsigned long TICKS_PER_MILISEC = (CPU_FREQ / PRESCALER) / 1000;
 const unsigned short TICKS_PER_INTERRUPT = INTERRUPT_INTERVAL * TICKS_PER_MILISEC - 1; // amount of ticks in an interrupt interval
-const unsigned short INTERRUPTS_PER_BIT = 1000 / (BAUD_RATE * INTERRUPT_INTERVAL);
-
-volatile enum CommsState { IDLE, INIT_BIT, BYTE, PARITY_BIT, FINAL_BIT } state = IDLE;
-int buffer = 0;
 
 // SHCEDULER
 int Sched_AddT(void (*f)(void), int d, int p);
@@ -112,60 +109,7 @@ void Sched_Dispatch(void) {
     }
 }
 
-void comms_isr() {
-    static int interrupt_count = 0;
-    static int bits_sent = 0;
-    static int parity_bit = 0;
-
-    switch (state) {
-    case IDLE:
-        digitalWrite(7, HIGH);
-        break;
-    case INIT_BIT:
-        digitalWrite(7, LOW);
-        interrupt_count++;
-        if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
-            interrupt_count = 0;
-            bits_sent = 0;
-            parity_bit = 0;
-            state = BYTE;
-        }
-        break;
-    case BYTE:
-        digitalWrite(7, buffer & 1);
-        interrupt_count++;
-        if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
-            interrupt_count = 0;
-            parity_bit ^= buffer & 1;
-            bits_sent++;
-            if (bits_sent == 9) {
-                state = PARITY_BIT;
-            } else {
-                buffer >>= 1;
-            }
-        }
-        break;
-    case PARITY_BIT:
-        digitalWrite(7, parity_bit);
-        interrupt_count++;
-        if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
-            interrupt_count = 0;
-            state = FINAL_BIT;
-        }
-        break;
-    case FINAL_BIT:
-        digitalWrite(7, HIGH);
-        interrupt_count++;
-        if (interrupt_count >= (INTERRUPTS_PER_BIT - 1) * 4) {
-            interrupt_count = 0;
-            state = IDLE;
-        }
-        break;
-    }
-}
-
 ISR(TIMER1_COMPA_vect) { // timer1 interrupt
-    comms_isr();
     Sched_Schedule();
     Sched_Dispatch();
 }
@@ -184,12 +128,9 @@ float currentAngle = 0;
 float targetAngle = 0;
 long int angleTime;
 
-void sendByte() {
-    if (state == IDLE) {
-        buffer = currentAngle < 0 ? currentAngle * -100 : currentAngle * 100;
-        buffer |= (currentAngle < 0) << 8;
-        state = INIT_BIT;
-    }
+void commsIR() {
+    int8_t angleSend = currentAngle * 100.0f;
+    IrSender.sendNEC(0x00, angleSend, 5);
 }
 
 void configureAngleSensor(void) { lsm.setupGyro(lsm.LSM9DS0_GYROSCALE_245DPS); }
@@ -237,8 +178,8 @@ void translateCommands() {
         right_motor = -speed;
         left_motor = -speed;
         break;
-    case KEY5:
     default:
+    case KEY5:
         right_motor = 0;
         left_motor = 0;
         break;
@@ -297,7 +238,8 @@ void setup() {
     configureAngleSensor();
     updateAngleError();
 
-    IrReceiver.begin(IR, ENABLE_LED_FEEDBACK);
+    IrReceiver.begin(IR_RECEIVER, ENABLE_LED_FEEDBACK);
+    IrSender.begin(IR_TRANSMITTER);
 
     pinMode(PWMA, OUTPUT);
     pinMode(AIN2, OUTPUT);
@@ -312,7 +254,7 @@ void setup() {
     Sched_AddT(move, 1, 50);
     Sched_AddT(displayData, 1, 500);
     Sched_AddT(updateAngle, 1, 10);
-    Sched_AddT(sendByte, 1, 10);
+    Sched_AddT(commsIR, 1, 10);
 }
 
 void loop() {
