@@ -130,7 +130,7 @@ long int angleTime;
 
 void commsIR() {
     int8_t angleSend = currentAngle * 100.0f;
-    IrSender.sendNEC(0x00, angleSend, -1);
+    IrSender.sendNEC(0x69, angleSend, 0);
 }
 
 void configureAngleSensor(void) { lsm.setupGyro(lsm.LSM9DS0_GYROSCALE_245DPS); }
@@ -202,7 +202,7 @@ void decodeIR() {
     if (IrReceiver.decode()) {
         unsigned int new_command = IrReceiver.decodedIRData.command;
         IrReceiver.resume();
-        if (new_command != 0x00 && new_command != command) {
+        if (IrReceiver.decodedIRData.address == 0x00 && new_command != 0x00 && new_command != command) {
           command = new_command;
           targetAngle = currentAngle;
         }
@@ -252,12 +252,12 @@ void setup() {
     pinMode(BIN2, OUTPUT);
 
     Sched_Init();
-    Sched_AddT(decodeIR, 1, 50);
+    Sched_AddT(decodeIR, 1, 10);
     Sched_AddT(translateCommands, 1, 50);
     Sched_AddT(move, 1, 50);
     Sched_AddT(displayData, 1, 500);
+    Sched_AddT(commsIR, 1, 200);
     Sched_AddT(updateAngle, 1, 10);
-    Sched_AddT(commsIR, 1, 400);
 }
 
 void loop() {
