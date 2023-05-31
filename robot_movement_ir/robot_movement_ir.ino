@@ -121,7 +121,7 @@ int left_motor = 0;
 int speed = 50;
 int rotate_speed = 3;
 
-unsigned int command;
+unsigned int command = KEY5;
 
 float angleError = 0;
 float currentAngle = 0;
@@ -130,7 +130,7 @@ long int angleTime;
 
 void commsIR() {
     int8_t angleSend = currentAngle * 100.0f;
-    IrSender.sendNEC(0x00, angleSend, 5);
+    IrSender.sendNEC(0x00, angleSend, -1);
 }
 
 void configureAngleSensor(void) { lsm.setupGyro(lsm.LSM9DS0_GYROSCALE_245DPS); }
@@ -200,9 +200,12 @@ void move() {
 
 void decodeIR() {
     if (IrReceiver.decode()) {
-        command = IrReceiver.decodedIRData.command;
+        unsigned int new_command = IrReceiver.decodedIRData.command;
         IrReceiver.resume();
-        targetAngle = currentAngle;
+        if (new_command != 0x00 && new_command != command) {
+          command = new_command;
+          targetAngle = currentAngle;
+        }
     }
 }
 
@@ -254,7 +257,7 @@ void setup() {
     Sched_AddT(move, 1, 50);
     Sched_AddT(displayData, 1, 500);
     Sched_AddT(updateAngle, 1, 10);
-    Sched_AddT(commsIR, 1, 10);
+    Sched_AddT(commsIR, 1, 400);
 }
 
 void loop() {
