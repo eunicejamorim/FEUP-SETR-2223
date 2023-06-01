@@ -254,12 +254,12 @@ void getDistance() {
 
 void translateCommands() {
     if (stopped ? (distance > stopped_distance + tolerance) : (distance > minDist + tolerance)) {
-        right_motor = speed - B_SPEED_OFFSET;
-        left_motor = speed;
+        right_motor = speed - B_SPEED_OFFSET / 2;
+        left_motor = speed + B_SPEED_OFFSET / 2;
         stopped = 0;
     } else if (stopped ? (distance < stopped_distance - tolerance) : (distance < minDist - tolerance)) {
-        right_motor = -speed + B_SPEED_OFFSET;
-        left_motor = -speed;
+        right_motor = -speed + B_SPEED_OFFSET / 2;
+        left_motor = -speed - B_SPEED_OFFSET / 2;
         stopped = 0;
     } else {
         right_motor = 0;
@@ -269,7 +269,7 @@ void translateCommands() {
     }
 
     float turningSpeed = constrain((currentAngle - targetAngle) * 30.0f, -30, 30);
-    right_motor -= turningSpeed;
+    right_motor -= turningSpeed; 
     left_motor += turningSpeed;
 }
 
