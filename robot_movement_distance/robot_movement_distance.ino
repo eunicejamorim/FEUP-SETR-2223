@@ -182,7 +182,7 @@ void getDistance() {
     Fdistance = Fdistance * 0.0343f / 2.0f;
 
     if (Fdistance > 200.0f) {
-        return;
+        Fdistance = 200.0f;
     }
 
     distance = Fdistance;
