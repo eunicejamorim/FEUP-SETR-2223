@@ -201,11 +201,11 @@ void move() {
 void decodeIR() {
     if (IrReceiver.decode()) {
         unsigned int new_command = IrReceiver.decodedIRData.command;
-        IrReceiver.resume();
         if (IrReceiver.decodedIRData.address == 0x00 && new_command != 0x00 && new_command != command) {
           command = new_command;
           targetAngle = currentAngle;
         }
+        IrReceiver.resume();
     }
 }
 
