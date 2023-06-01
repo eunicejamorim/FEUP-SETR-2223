@@ -182,7 +182,7 @@ void getDistance() {
     Fdistance = Fdistance * 0.0343f / 2.0f;
 
     if (Fdistance > 200.0f) {
-        return;
+        Fdistance = 200.0f;
     }
 
     distance = Fdistance;
@@ -210,10 +210,7 @@ void translateCommands() {
 }
 
 void processAngleCarFront() {
-    float smallDistance = 60.0f;
-    float carAngleRad = PI - frontCarAngle;
-    float hip = sqrtf(30 * 30 + smallDistance * smallDistance - 2.0f * 30 * smallDistance * cosf(carAngleRad));
-    targetAngle = asinf(sinf(carAngleRad) * smallDistance / hip);
+    targetAngle = frontCarAngle;
 }
 
 void decodeIR() {
