@@ -1,4 +1,5 @@
 #define DECODE_NEC
+#define DECODE_SAMSUNG
 #include <Adafruit_LSM9DS0.h>
 #include <Adafruit_SSD1306.h>
 #include <IRremote.hpp>
@@ -129,8 +130,8 @@ float targetAngle = 0;
 long int angleTime;
 
 void commsIR() {
-    int8_t angleSend = currentAngle * 100.0f;
-    IrSender.sendNEC(0x69, angleSend, 0);
+    int16_t angleSend = currentAngle * 1000.0f;
+    IrSender.sendSamsung(0x69, angleSend, 0);
 }
 
 void configureAngleSensor(void) { lsm.setupGyro(lsm.LSM9DS0_GYROSCALE_245DPS); }
