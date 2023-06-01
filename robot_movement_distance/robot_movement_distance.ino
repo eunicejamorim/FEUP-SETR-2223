@@ -1,4 +1,4 @@
-#define DECODE_NEC
+#define DECODE_SAMSUNG
 #include <Adafruit_LSM9DS0.h>
 #include <Adafruit_SSD1306.h>
 #include <IRremote.hpp>
@@ -190,12 +190,12 @@ void getDistance() {
 
 void translateCommands() {
     if (stopped ? (distance > stopped_distance + tolerance) : (distance > minDist + tolerance)) {
-        right_motor = speed - B_SPEED_OFFSET;
-        left_motor = speed;
+        right_motor = speed - B_SPEED_OFFSET / 2;
+        left_motor = speed + B_SPEED_OFFSET / 2;
         stopped = 0;
     } else if (stopped ? (distance < stopped_distance - tolerance) : (distance < minDist - tolerance)) {
-        right_motor = -speed + B_SPEED_OFFSET;
-        left_motor = -speed;
+        right_motor = -speed + B_SPEED_OFFSET / 2;
+        left_motor = -speed - B_SPEED_OFFSET / 2;
         stopped = 0;
     } else {
         right_motor = 0;
@@ -205,17 +205,22 @@ void translateCommands() {
     }
 
     float turningSpeed = constrain((currentAngle - targetAngle) * 30.0f, -30, 30);
-    right_motor -= turningSpeed;
+    right_motor -= turningSpeed; 
     left_motor += turningSpeed;
 }
 
-void processAngleCarFront() { targetAngle = (frontCarAngle > 0 ? frontCarAngle + 0.08 : frontCarAngle - 0.08); }
+void processAngleCarFront() {
+    float smallDistance = 60.0f;
+    float carAngleRad = PI - frontCarAngle;
+    float hip = sqrtf(30 * 30 + smallDistance * smallDistance - 2.0f * 30 * smallDistance * cosf(carAngleRad));
+    targetAngle = asinf(sinf(carAngleRad) * smallDistance / hip);
+}
 
 void decodeIR() {
     if (IrReceiver.decode()) {
         unsigned int new_frontCarAngle = IrReceiver.decodedIRData.command;
         if (IrReceiver.decodedIRData.address == 0x69 && new_frontCarAngle != frontCarAngle) {
-            frontCarAngle = ((int8_t) new_frontCarAngle) / 100.0f;
+            frontCarAngle = ((int16_t) new_frontCarAngle) / 1000.0f;
         }
         IrReceiver.resume();
     }
@@ -241,7 +246,6 @@ void displayData() {
 }
 
 void setup() {
-    //Serial.begin(9600);
     display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
     display.setTextSize(1);
     display.setTextColor(WHITE);
@@ -271,8 +275,8 @@ void setup() {
     pinMode(ECHO, INPUT);
 
     Sched_Init();
-    Sched_AddT(decodeIR, 1, 10);
     Sched_AddT(getDistance, 1, 100);
+    Sched_AddT(decodeIR, 1, 10);
     Sched_AddT(translateCommands, 1, 50);
     Sched_AddT(move, 1, 50);
     Sched_AddT(displayData, 1, 500);
