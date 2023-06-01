@@ -1,4 +1,4 @@
-#define DECODE_NEC
+#define DECODE_SAMSUNG
 #include <Adafruit_LSM9DS0.h>
 #include <Adafruit_SSD1306.h>
 #include <IRremote.hpp>
@@ -10,20 +10,7 @@ Adafruit_SSD1306 display(OLED_RESET, OLED_SA0);
 
 Adafruit_LSM9DS0 lsm(1000); // Use I2C, ID #1000
 
-#define PWMA 6  // Left Motor Speed pin (ENA)
-#define AIN2 A0 // Motor-L forward (IN2).
-#define AIN1 A1 // Motor-L backward (IN1)
-#define PWMB 11 // Right Motor Speed pin (ENB)
-#define BIN1 A2 // Motor-R forward (IN3)
-#define BIN2 A3 // Motor-R backward (IN4)
-#define IR_RECEIVER 5
 #define IR_TRANSMITTER 12
-
-#define KEY2 0x18 // Key:2
-#define KEY8 0x52 // Key:8
-#define KEY4 0x08 // Key:4
-#define KEY6 0x5A // Key:6
-#define KEY5 0x1C // Key:5
 
 #define CPU_FREQ 16000000L   // cpu clock
 #define PRESCALER 256        // cpu prescaler
@@ -114,23 +101,13 @@ ISR(TIMER1_COMPA_vect) { // timer1 interrupt
     Sched_Dispatch();
 }
 
-// CODE
-int right_motor = 0;
-int left_motor = 0;
-
-int speed = 50;
-int rotate_speed = 3;
-
-unsigned int command = KEY5;
-
 float angleError = 0;
 float currentAngle = 0;
-float targetAngle = 0;
 long int angleTime;
 
 void commsIR() {
-    int8_t angleSend = currentAngle * 100.0f;
-    IrSender.sendNEC(0x69, angleSend, 0);
+    int16_t angleSend = currentAngle * 1000.0f;
+    IrSender.sendSamsung(0x69, angleSend, 0);
 }
 
 void configureAngleSensor(void) { lsm.setupGyro(lsm.LSM9DS0_GYROSCALE_245DPS); }
@@ -158,69 +135,12 @@ void updateAngle() {
     currentAngle += (gyro.gyro.z - angleError) * timeElapsed * 0.001;
 }
 
-void translateCommands() {
-    switch (command) {
-    case KEY2:
-        right_motor = speed;
-        left_motor = speed;
-        break;
-    case KEY4:
-        right_motor = speed + rotate_speed;
-        left_motor = speed - rotate_speed;
-        targetAngle = currentAngle;
-        break;
-    case KEY6:
-        right_motor = speed - rotate_speed;
-        left_motor = speed + rotate_speed;
-        targetAngle = currentAngle;
-        break;
-    case KEY8:
-        right_motor = -speed;
-        left_motor = -speed;
-        break;
-    default:
-    case KEY5:
-        right_motor = 0;
-        left_motor = 0;
-        break;
-    }
-
-    right_motor -= (currentAngle - targetAngle) * 30.0f;
-    left_motor += (currentAngle - targetAngle) * 30.0f;
-}
-
-void move() {
-    analogWrite(PWMA, abs(left_motor));
-    analogWrite(PWMB, abs(right_motor));
-    digitalWrite(AIN1, left_motor >= 0 ? LOW : HIGH);
-    digitalWrite(AIN2, left_motor > 0 ? HIGH : LOW);
-    digitalWrite(BIN1, right_motor >= 0 ? LOW : HIGH);
-    digitalWrite(BIN2, right_motor > 0 ? HIGH : LOW);
-}
-
-void decodeIR() {
-    if (IrReceiver.decode()) {
-        unsigned int new_command = IrReceiver.decodedIRData.command;
-        if (IrReceiver.decodedIRData.address == 0x00 && new_command != 0x00 && new_command != command) {
-          command = new_command;
-          targetAngle = currentAngle;
-        }
-        IrReceiver.resume();
-    }
-}
-
 void displayData() {
     display.clearDisplay();
     display.setCursor(25 - 3 * (abs(currentAngle) < 10 ? 0 : abs(currentAngle) < 100 ? 1 : 2) - (currentAngle < 0 ? 3 : 0), 0);
     display.print(F("Angle: "));
     display.print(180 * currentAngle / M_PI);
     display.print(F("dg"));
-    display.setCursor(0, 16);
-    display.print(F("Right motor: "));
-    display.print(right_motor);
-    display.setCursor(0, 32);
-    display.print(F("Left motor: "));
-    display.print(left_motor);
     display.display();
 }
 
@@ -241,20 +161,12 @@ void setup() {
     configureAngleSensor();
     updateAngleError();
 
-    IrReceiver.begin(IR_RECEIVER, ENABLE_LED_FEEDBACK);
     IrSender.begin(IR_TRANSMITTER);
 
-    pinMode(PWMA, OUTPUT);
-    pinMode(AIN2, OUTPUT);
-    pinMode(AIN1, OUTPUT);
-    pinMode(PWMB, OUTPUT);
-    pinMode(BIN1, OUTPUT);
-    pinMode(BIN2, OUTPUT);
-
     Sched_Init();
-    Sched_AddT(decodeIR, 1, 10);
-    Sched_AddT(translateCommands, 1, 50);
-    Sched_AddT(move, 1, 50);
+    //Sched_AddT(decodeIR, 1, 10);
+    //Sched_AddT(translateCommands, 1, 50);
+    //Sched_AddT(move, 1, 50);
     Sched_AddT(displayData, 1, 500);
     Sched_AddT(commsIR, 1, 200);
     Sched_AddT(updateAngle, 1, 10);
