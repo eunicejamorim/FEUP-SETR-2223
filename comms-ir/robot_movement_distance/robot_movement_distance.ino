@@ -1,5 +1,7 @@
+#define DECODE_SAMSUNG
 #include <Adafruit_LSM9DS0.h>
 #include <Adafruit_SSD1306.h>
+#include <IRremote.hpp>
 
 // DEFINES
 #define OLED_RESET 9
@@ -15,6 +17,8 @@ Adafruit_LSM9DS0 lsm(1000);
 #define PWMB 11 // Right Motor Speed pin (ENB)
 #define BIN1 A2 // Motor-R forward (IN3)
 #define BIN2 A3 // Motor-R backward (IN4)
+
+#define IR_RECEIVER 12
 
 #define ECHO 4
 #define TRIG 5
@@ -108,69 +112,7 @@ void Sched_Dispatch(void) {
     }
 }
 
-float frontCarAngle = 0;
-
-void comms_isr() {
-    static int interrupt_count = 0;
-    static int bits_received = 0;
-    static int parity = 0;
-    static int parity_received = 0;
-
-    switch (state) {
-    case IDLE:
-        break;
-    case INIT_BIT:
-        interrupt_count++;
-        if (interrupt_count >= (INTERRUPTS_PER_BIT - 1) / 2) {
-            buffer = 0;
-            interrupt_count = 0;
-            bits_received = 0;
-            parity = 0;
-            state = BYTE;
-        }
-        break;
-    case BYTE:
-        interrupt_count++;
-        if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
-            interrupt_count = 0;
-            int r = digitalRead(7);
-            parity ^= r;
-            if (bits_received == 8) {
-                if (r) {
-                    buffer = -buffer;
-                }
-                state = PARITY_BIT;
-            } else {
-                buffer |= r << bits_received;
-            }
-            bits_received++;
-        }
-        break;
-    case PARITY_BIT:
-        interrupt_count++;
-        if (interrupt_count >= INTERRUPTS_PER_BIT - 1) {
-            interrupt_count = 0;
-            parity_received = digitalRead(7);
-            state = FINAL_BIT;
-        }
-        break;
-    case FINAL_BIT:
-        interrupt_count++;
-        if (interrupt_count >= (INTERRUPTS_PER_BIT - 1) * 2) {
-            interrupt_count = 0;
-            if (digitalRead(7) == HIGH && parity_received == parity) {  // Otherwise ignore packet
-                frontCarAngle = (float)(buffer) / 100.0f;
-                //Serial.println(frontCarAngle);
-            }
-            state = IDLE;
-            attachInterrupt(digitalPinToInterrupt(7), start_receiving, FALLING);
-        }
-        break;
-    }
-}
-
 ISR(TIMER1_COMPA_vect) { // timer1 interrupt
-    comms_isr();
     Sched_Schedule();
     Sched_Dispatch();
 }
@@ -192,14 +134,8 @@ float distance;
 float angleError = 0;
 float currentAngle = 0;
 float targetAngle = 0;
+float frontCarAngle = 0;
 long int angleTime;
-
-void start_receiving() {
-    if (digitalRead(7) == LOW) {
-        detachInterrupt(digitalPinToInterrupt(7));
-        state = INIT_BIT;
-    }
-}
 
 void configureAngleSensor(void) { lsm.setupGyro(lsm.LSM9DS0_GYROSCALE_245DPS); }
 
@@ -273,7 +209,22 @@ void translateCommands() {
     left_motor += turningSpeed;
 }
 
-void processAngleCarFront() { targetAngle = (frontCarAngle > 0 ? frontCarAngle + 0.08 : frontCarAngle - 0.08); }
+void processAngleCarFront() {
+    float smallDistance = 60.0f;
+    float carAngleRad = PI - frontCarAngle;
+    float hip = sqrtf(30 * 30 + smallDistance * smallDistance - 2.0f * 30 * smallDistance * cosf(carAngleRad));
+    targetAngle = asinf(sinf(carAngleRad) * smallDistance / hip);
+}
+
+void decodeIR() {
+    if (IrReceiver.decode()) {
+        unsigned int new_frontCarAngle = IrReceiver.decodedIRData.command;
+        if (IrReceiver.decodedIRData.address == 0x69 && new_frontCarAngle != frontCarAngle) {
+            frontCarAngle = ((int16_t) new_frontCarAngle) / 1000.0f;
+        }
+        IrReceiver.resume();
+    }
+}
 
 void displayData() {
     display.clearDisplay();
@@ -295,7 +246,6 @@ void displayData() {
 }
 
 void setup() {
-    //Serial.begin(9600);
     display.begin(SSD1306_SWITCHCAPVCC, 0x3D);
     display.setTextSize(1);
     display.setTextColor(WHITE);
@@ -312,6 +262,8 @@ void setup() {
     configureAngleSensor();
     updateAngleError();
 
+    IrReceiver.begin(IR_RECEIVER, ENABLE_LED_FEEDBACK);
+
     pinMode(PWMA, OUTPUT);
     pinMode(AIN2, OUTPUT);
     pinMode(AIN1, OUTPUT);
@@ -322,10 +274,9 @@ void setup() {
     pinMode(TRIG, OUTPUT);
     pinMode(ECHO, INPUT);
 
-    attachInterrupt(digitalPinToInterrupt(7), start_receiving, FALLING);
-
     Sched_Init();
     Sched_AddT(getDistance, 1, 100);
+    Sched_AddT(decodeIR, 1, 10);
     Sched_AddT(translateCommands, 1, 50);
     Sched_AddT(move, 1, 50);
     Sched_AddT(displayData, 1, 500);
