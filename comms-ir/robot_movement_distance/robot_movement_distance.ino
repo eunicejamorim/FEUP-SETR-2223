@@ -212,7 +212,8 @@ void translateCommands() {
 void processAngleCarFront() {
     float smallDistance = 60.0f;
     float carAngleRad = PI - frontCarAngle;
-    float hip = sqrtf(30 * 30 + smallDistance * smallDistance - 2.0f * 30 * smallDistance * cosf(carAngleRad));
+    float d = min(30, distance);
+    float hip = sqrtf(d * d + smallDistance * smallDistance - 2.0f * d * smallDistance * cosf(carAngleRad));
     targetAngle = asinf(sinf(carAngleRad) * smallDistance / hip);
 }
 
